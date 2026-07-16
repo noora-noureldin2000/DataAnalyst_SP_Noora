@@ -1,0 +1,31 @@
+{
+  // Data Analyst Specialist configuration
+  "name": "Data Analyst Specialist – Medical Research",
+  "version": "1.0.0",
+  "description": "Comprehensive statistical analysis for medical research data. Cleans Excel data, detects variable types, builds SAP, runs descriptive/bivariate/multivariable analysis, generates publication-ready figures, and exports APA-formatted Word reports.",
+  "agents": {
+    "data-analyst": {
+      "name": "Data Analyst Specialist",
+      "role": "Senior Medical Statistician and Data Analyst",
+      "skill": "SKILL.md",
+      "model": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": 64000
+      }
+    }
+  },
+  "permissions": [
+    "read",
+    "write",
+    "browser"
+  ],
+  "modes": {
+    "default": {
+      "description": "Full analysis mode: clean → analyze → visualize → report",
+      "commands": [
+        "python run_analysis.py --data $DATA --output $OUTPUT --brief $BRIEF"
+      ]
+    }
+  }
+}

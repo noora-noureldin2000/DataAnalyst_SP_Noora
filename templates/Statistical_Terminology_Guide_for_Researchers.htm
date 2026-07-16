@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 Statistical Terminology Guide for Researchers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5', // Indigo
+                        secondary: '#10B981', // Emerald
+                        accent: '#F59E0B', // Amber
+                        danger: '#EF4444', // Red
+                        info: '#3B82F6', // Blue
+                        light: '#F3F4F6', // Gray-100
+                        dark: '#1F2937', // Gray-800
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Merriweather', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+            scroll-behavior: smooth;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Merriweather', serif;
+        }
+
+        .term-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+
+        .term-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        .term-card.active {
+            border-left-color: #4F46E5;
+            background-color: #EEF2FF;
+        }
+        
+        .category-btn {
+            transition: all 0.2s ease;
+        }
+
+        .category-btn:hover, .category-btn.active {
+            transform: scale(1.05);
+            font-weight: 600;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+
+        /* Search highlight animation */
+        @keyframes highlight {
+            0% { background-color: transparent; }
+            50% { background-color: #fef08a; }
+            100% { background-color: transparent; }
+        }
+        .highlight-text {
+            animation: highlight 2s ease-out;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-primary to-info text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="text-4xl">📈</span>
+                    <div>
+                        <h1 class="text-2xl md:text-3xl font-bold tracking-tight">Statistical Terminology Guide</h1>
+                        <p class="text-indigo-100 text-sm mt-1 font-medium">A researcher's interactive companion to data science concepts</p>
+                    </div>
+                </div>
+                
+                <!-- Search Bar -->
+                <div class="relative w-full md:w-96">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-search text-gray-300"></i>
+                    </div>
+                    <input type="text" id="searchInput" 
+                        class="block w-full pl-10 pr-3 py-2 border border-transparent rounded-full leading-5 bg-white bg-opacity-20 text-white placeholder-white focus:outline-none focus:bg-white focus:text-gray-900 focus:placeholder-gray-500 sm:text-sm transition duration-150 ease-in-out" 
+                        placeholder="Search terms (e.g., Hypothesis, ANOVA)...">
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex flex-col md:flex-row gap-8">
+        
+        <!-- Sidebar: Categories -->
+        <aside class="w-full md:w-1/4 flex-shrink-0 sticky top-32 h-max">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                <h2 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">📂 Categories</h2>
+                <nav class="flex flex-col gap-2" id="categoryNav">
+                    <button class="category-btn active text-left px-4 py-2 rounded-lg bg-indigo-50 text-indigo-700 font-medium" data-category="all">
+                        🌟 All Terms
+                    </button>
+                    <button class="category-btn text-left px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-50" data-category="basics">
+                        🧱 Basics & Assumptions
+                    </button>
+                    <button class="category-btn text-left px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-50" data-category="descriptive">
+                        📊 Descriptive Statistics
+                    </button>
+                    <button class="category-btn text-left px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-50" data-category="inferential">
+                        🔮 Inferential Statistics
+                    </button>
+                    <button class="category-btn text-left px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-50" data-category="tests">
+                        🧪 Statistical Tests
+                    </button>
+                    <button class="category-btn text-left px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-50" data-category="errors">
+                        ⚠️ Errors & Biases
+                    </button>
+                </nav>
+            </div>
+            
+            <div class="mt-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-5 border border-amber-100">
+                <h3 class="font-bold text-amber-800 mb-2 flex items-center gap-2"><i class="fas fa-lightbulb"></i> Quick Tip</h3>
+                <p class="text-sm text-amber-700">Click on any term card to expand it and read a detailed real-world example!</p>
+            </div>
+        </aside>
+
+        <!-- Term Dictionary Area -->
+        <div class="w-full md:w-3/4">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-gray-800" id="currentCategoryTitle">🌟 All Terms</h2>
+                <span class="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full" id="termCount">0 Terms</span>
+            </div>
+
+            <!-- Terms Container -->
+            <div id="termsContainer" class="grid grid-cols-1 gap-6">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+            
+            <!-- No Results Message -->
+            <div id="noResults" class="hidden text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
+                <div class="text-4xl mb-4">🔍😕</div>
+                <h3 class="text-lg font-bold text-gray-800 mb-2">No terms found</h3>
+                <p class="text-gray-500">Try adjusting your search query or selecting a different category.</p>
+                <button id="clearSearchBtn" class="mt-4 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition font-medium">Clear Search</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-gray-300 py-10 border-t-4 border-indigo-500 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center">
+            <div class="text-3xl mb-4">✨</div>
+            <p class="mb-2 text-lg font-serif italic text-white">"In God we trust, all others must bring data."</p>
+            <p class="text-sm mb-6 text-gray-400">— W. Edwards Deming</p>
+            <div class="w-24 h-px bg-gray-700 mb-6"></div>
+            <p class="text-sm text-gray-400">
+                Interactive Statistical Terminology Guide &copy; 2026<br>
+                Powered by <a href="https://naggaranalytics.com" target="_blank" class="text-indigo-400 font-semibold hover:text-indigo-300 transition-colors duration-200 mt-2 inline-block">naggaranalytics.com</a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // 1. Data Structure: Integrated Array of Term Objects
+        const statisticalTerms = [
+            // --- BASICS & ASSUMPTIONS ---
+            {
+                id: 'variable',
+                term: 'Variable',
+                emoji: '🔠',
+                category: 'basics',
+                definition: 'Any characteristic, number, or quantity that can be measured or counted. A data item.',
+                example: 'In a study about health, variables could include <strong>Age</strong>, <strong>Blood Pressure</strong>, and <strong>Eye Color</strong>.',
+                colorClass: 'border-blue-200',
+                bgClass: 'bg-blue-50',
+                iconClass: 'text-blue-500'
+            },
+            {
+                id: 'population',
+                term: 'Population',
+                emoji: '🌍',
+                category: 'basics',
+                definition: 'The entire group that you want to draw conclusions about.',
+                example: 'If you want to know the average height of adult women in France, your population is <strong>every single adult woman in France</strong>.',
+                colorClass: 'border-blue-200',
+                bgClass: 'bg-blue-50',
+                iconClass: 'text-blue-500'
+            },
+            {
+                id: 'sample',
+                term: 'Sample',
+                emoji: '🧑‍🤝‍🧑',
+                category: 'basics',
+                definition: 'A specific, smaller group collected from the population, from which you will collect data.',
+                example: 'Instead of measuring every woman in France (population), you measure the height of <strong>1,000 randomly selected women</strong> (the sample).',
+                colorClass: 'border-blue-200',
+                bgClass: 'bg-blue-50',
+                iconClass: 'text-blue-500'
+            },
+            {
+                id: 'continuous-data',
+                term: 'Continuous Data',
+                emoji: '📏',
+                category: 'basics',
+                definition: 'Data that can take any value within a range (often includes decimals). It is measured rather than counted.',
+                example: 'A person\'s <strong>weight</strong> (e.g., 65.4 kg, 65.42 kg) or <strong>time taken to run a race</strong> (e.g., 12.34 seconds).',
+                colorClass: 'border-blue-200',
+                bgClass: 'bg-blue-50',
+                iconClass: 'text-blue-500'
+            },
+            {
+                id: 'categorical-data',
+                term: 'Categorical Data',
+                emoji: '🏷️',
+                category: 'basics',
+                definition: 'Data that represents characteristics and can be divided into distinct groups or categories.',
+                example: '<strong>Car brands</strong> (Toyota, Ford, Honda) or <strong>Blood Types</strong> (A, B, AB, O). You cannot average blood types.',
+                colorClass: 'border-blue-200',
+                bgClass: 'bg-blue-50',
+                iconClass: 'text-blue-500'
+            },
+            {
+                id: 'parametric',
+                term: 'Parametric Test',
+                emoji: '📐',
+                category: 'basics',
+                definition: 'A statistical test that assumes your data follows a specific distribution, usually a "normal" (bell-shaped) distribution. Best for continuous data.',
+                example: 'Using an independent t-test to compare the heights of adult men and women, knowing that human height usually follows a normal, bell-curved distribution.',
+                colorClass: 'border-blue-200',
+                bgClass: 'bg-blue-50',
+                iconClass: 'text-blue-500'
+            },
+            {
+                id: 'non-parametric',
+                term: 'Non-parametric Test',
+                emoji: '🏔️',
+                category: 'basics',
+                definition: 'A "distribution-free" test that does NOT assume your data follows a normal bell curve. Used when data is skewed, ranked (ordinal), or sample sizes are very small.',
+                example: 'Using a Mann-Whitney U test to compare race finishing times, because a few very slow runners make the data heavily skewed rather than bell-shaped.',
+                colorClass: 'border-blue-200',
+                bgClass: 'bg-blue-50',
+                iconClass: 'text-blue-500'
+            },
+
+            // --- DESCRIPTIVE STATISTICS ---
+            {
+                id: 'mean',
+                term: 'Mean (Average)',
+                emoji: '➗',
+                category: 'descriptive',
+                definition: 'The sum of all values divided by the total number of values.',
+                example: 'Test scores: 80, 90, 100. <br>Mean = (80 + 90 + 100) / 3 = <strong>90</strong>.',
+                colorClass: 'border-emerald-200',
+                bgClass: 'bg-emerald-50',
+                iconClass: 'text-emerald-500'
+            },
+            {
+                id: 'median',
+                term: 'Median',
+                emoji: '🎯',
+                category: 'descriptive',
+                definition: 'The middle number in a sorted, ascending or descending, list of numbers.',
+                example: 'Salaries in a cafe: $20k, $22k, $25k, $26k, $1,000k (CEO). <br>The median is <strong>$25k</strong>. (Notice how it is not affected by the extreme CEO salary like the mean would be!).',
+                colorClass: 'border-emerald-200',
+                bgClass: 'bg-emerald-50',
+                iconClass: 'text-emerald-500'
+            },
+            {
+                id: 'mode',
+                term: 'Mode',
+                emoji: '👑',
+                category: 'descriptive',
+                definition: 'The value that appears most frequently in a data set.',
+                example: 'Shoe sizes sold today: 7, 8, 8, 8, 9, 10, 10. <br>The mode is <strong>8</strong> (it appears three times).',
+                colorClass: 'border-emerald-200',
+                bgClass: 'bg-emerald-50',
+                iconClass: 'text-emerald-500'
+            },
+            {
+                id: 'standard-deviation',
+                term: 'Standard Deviation (SD)',
+                emoji: '📉',
+                category: 'descriptive',
+                definition: 'A measure of the amount of variation or dispersion of a set of values relative to its mean.',
+                example: 'Two classes have an average score of 70%. <br>Class A scores: 68, 70, 72 (Low SD - close to mean). <br>Class B scores: 40, 70, 100 (High SD - spread out).',
+                colorClass: 'border-emerald-200',
+                bgClass: 'bg-emerald-50',
+                iconClass: 'text-emerald-500'
+            },
+            {
+                id: 'normal-distribution',
+                term: 'Normal Distribution',
+                emoji: '🔔',
+                category: 'descriptive',
+                definition: 'A function that represents the distribution of many random variables as a symmetrical bell-shaped graph.',
+                example: '<strong>Human heights</strong>. Most people are around average height (the middle bulge), with very few extremely short or extremely tall people (the tails).',
+                colorClass: 'border-emerald-200',
+                bgClass: 'bg-emerald-50',
+                iconClass: 'text-emerald-500'
+            },
+
+            // --- INFERENTIAL STATISTICS ---
+            {
+                id: 'hypothesis',
+                term: 'Hypothesis',
+                emoji: '🤔',
+                category: 'inferential',
+                definition: 'A proposed explanation or an educated guess made on the basis of limited evidence as a starting point for further investigation.',
+                example: '"I hypothesize that <strong>plants watered with coffee will grow faster</strong> than plants watered with plain water."',
+                colorClass: 'border-purple-200',
+                bgClass: 'bg-purple-50',
+                iconClass: 'text-purple-500'
+            },
+            {
+                id: 'null-hypothesis',
+                term: 'Null Hypothesis (H0)',
+                emoji: '🚫',
+                category: 'inferential',
+                definition: 'The default position that there is no relationship between two measured phenomena, or no association among groups.',
+                example: '"There is <strong>no difference</strong> in growth rate between plants watered with coffee and plants watered with water." (Researchers usually try to disprove this).',
+                colorClass: 'border-purple-200',
+                bgClass: 'bg-purple-50',
+                iconClass: 'text-purple-500'
+            },
+            {
+                id: 'p-value',
+                term: 'P-Value',
+                emoji: '🎲',
+                category: 'inferential',
+                definition: 'The probability of obtaining test results at least as extreme as the results actually observed, assuming that the null hypothesis is correct.',
+                example: 'You run your plant experiment and get a p-value of <strong>0.03</strong> (3%). Since this is lower than the typical threshold (0.05), you conclude coffee <em>does</em> affect plant growth (reject the null).',
+                colorClass: 'border-purple-200',
+                bgClass: 'bg-purple-50',
+                iconClass: 'text-purple-500'
+            },
+            {
+                id: 'confidence-interval',
+                term: 'Confidence Interval (CI)',
+                emoji: '🥅',
+                category: 'inferential',
+                definition: 'A range of values so defined that there is a specified probability that the value of a parameter lies within it (usually 95%).',
+                example: 'We are 95% confident that the true average weight of a newborn elephant is between <strong>90 kg and 120 kg</strong>. (We don\'t know the exact average, but we are highly confident it\'s in this net).',
+                colorClass: 'border-purple-200',
+                bgClass: 'bg-purple-50',
+                iconClass: 'text-purple-500'
+            },
+            {
+                id: 'coefficient',
+                term: 'Coefficient (Regression)',
+                emoji: '🔢',
+                category: 'inferential',
+                definition: 'A numerical value in a statistical model that represents the strength and direction of the relationship between a predictor variable and the outcome. It indicates how much the outcome is expected to change for a one-unit change in the predictor.',
+                example: 'In a model predicting house prices, if the coefficient for "number of bedrooms" is <strong>$50,000</strong>, it means each additional bedroom adds an estimated $50,000 to the house\'s selling price.',
+                colorClass: 'border-purple-200',
+                bgClass: 'bg-purple-50',
+                iconClass: 'text-purple-500'
+            },
+
+            // --- STATISTICAL TESTS ---
+            {
+                id: 'ind-t-test',
+                term: 'Independent t-test',
+                emoji: '⚖️',
+                category: 'tests',
+                definition: 'A parametric test used to compare the averages (means) of two completely separate groups.',
+                example: 'Comparing the average final exam scores between <strong>Group A (who drank coffee)</strong> and <strong>Group B (who drank water)</strong>.',
+                colorClass: 'border-pink-200',
+                bgClass: 'bg-pink-50',
+                iconClass: 'text-pink-500'
+            },
+            {
+                id: 'paired-t-test',
+                term: 'Paired t-test',
+                emoji: '🔄',
+                category: 'tests',
+                definition: 'A parametric test used to compare the averages (means) of the SAME group measured at two different times.',
+                example: 'Measuring students\' reading speeds <strong>before</strong> a training program, and then measuring those exact same students\' speeds <strong>after</strong> the program.',
+                colorClass: 'border-pink-200',
+                bgClass: 'bg-pink-50',
+                iconClass: 'text-pink-500'
+            },
+            {
+                id: 'mann-whitney',
+                term: 'Mann-Whitney U Test',
+                emoji: '🥇',
+                category: 'tests',
+                definition: 'The non-parametric alternative to the independent t-test. Compares two independent groups based on their ranks or medians rather than means.',
+                example: 'Comparing the pain tolerance scores (on a subjective 1-10 scale) of patients receiving two different pain medications.',
+                colorClass: 'border-pink-200',
+                bgClass: 'bg-pink-50',
+                iconClass: 'text-pink-500'
+            },
+            {
+                id: 'wilcoxon',
+                term: 'Wilcoxon Signed-Rank Test',
+                emoji: '👯',
+                category: 'tests',
+                definition: 'The non-parametric alternative to the paired t-test. Compares two related samples or repeated measurements on a single sample.',
+                example: 'Testing the anxiety levels of employees (on a 1-5 scale) before and after a company wellness retreat.',
+                colorClass: 'border-pink-200',
+                bgClass: 'bg-pink-50',
+                iconClass: 'text-pink-500'
+            },
+            {
+                id: 'anova',
+                term: 'ANOVA (Analysis of Variance)',
+                emoji: '📊',
+                category: 'tests',
+                definition: 'A parametric test used to compare the averages (means) of THREE or more independent groups.',
+                example: 'Comparing the average crop yield for fields treated with <strong>Fertilizer A, Fertilizer B, or no fertilizer at all</strong>.',
+                colorClass: 'border-pink-200',
+                bgClass: 'bg-pink-50',
+                iconClass: 'text-pink-500'
+            },
+            {
+                id: 'kruskal-wallis',
+                term: 'Kruskal-Wallis Test',
+                emoji: '🏔️',
+                category: 'tests',
+                definition: 'The non-parametric alternative to ANOVA. Used to compare three or more independent groups when data isn\'t normally distributed.',
+                example: 'Comparing customer satisfaction ratings (poor, fair, good, excellent) across three different restaurant branches.',
+                colorClass: 'border-pink-200',
+                bgClass: 'bg-pink-50',
+                iconClass: 'text-pink-500'
+            },
+            {
+                id: 'chi-square',
+                term: 'Chi-Square Test of Independence',
+                emoji: '🗳️',
+                category: 'tests',
+                definition: 'A non-parametric test used to see if there is a relationship between two categorical (grouping) variables.',
+                example: 'Testing if there is a relationship between a person\'s <strong>gender (Male/Female)</strong> and their <strong>favorite ice cream flavor (Vanilla/Chocolate/Strawberry)</strong>.',
+                colorClass: 'border-pink-200',
+                bgClass: 'bg-pink-50',
+                iconClass: 'text-pink-500'
+            },
+            {
+                id: 'fishers',
+                term: 'Fisher\'s Exact Test',
+                emoji: '🎣',
+                category: 'tests',
+                definition: 'An alternative to the Chi-Square test used specifically when your sample sizes are very small.',
+                example: 'Testing if a very rare side effect is linked to a new experimental drug in a clinical trial that only has 15 participants total.',
+                colorClass: 'border-pink-200',
+                bgClass: 'bg-pink-50',
+                iconClass: 'text-pink-500'
+            },
+            {
+                id: 'pearson',
+                term: 'Pearson Correlation (r)',
+                emoji: '🔗',
+                category: 'tests',
+                definition: 'A parametric test that measures the strength and direction of a straight-line relationship between two continuous variables.',
+                example: 'Seeing if there is a relationship between <strong>how many hours a student studies</strong> and <strong>their score on a test</strong> (e.g., more hours = higher score).',
+                colorClass: 'border-teal-200',
+                bgClass: 'bg-teal-50',
+                iconClass: 'text-teal-500'
+            },
+            {
+                id: 'spearman',
+                term: 'Spearman Correlation (rho)',
+                emoji: '🎢',
+                category: 'tests',
+                definition: 'A non-parametric correlation that measures the strength of the relationship between ranked variables, even if the relationship isn\'t a perfect straight line.',
+                example: 'Checking the relationship between a runner\'s <strong>finishing rank</strong> in a marathon (1st, 2nd, 3rd) and their <strong>average weekly training hours</strong>.',
+                colorClass: 'border-teal-200',
+                bgClass: 'bg-teal-50',
+                iconClass: 'text-teal-500'
+            },
+            {
+                id: 'simple-regression',
+                term: 'Simple Linear Regression',
+                emoji: '📏',
+                category: 'tests',
+                definition: 'A statistical method used to predict the value of a continuous outcome variable based on the value of ONE other continuous predictor variable.',
+                example: 'Predicting a house\'s exact selling price based solely on its square footage.',
+                colorClass: 'border-teal-200',
+                bgClass: 'bg-teal-50',
+                iconClass: 'text-teal-500'
+            },
+            {
+                id: 'multiple-regression',
+                term: 'Multiple Linear Regression',
+                emoji: '🎯',
+                category: 'tests',
+                definition: 'A method used to predict a continuous outcome variable based on TWO OR MORE predictor variables.',
+                example: 'Predicting a house\'s selling price based on its <strong>square footage, the number of bedrooms, AND the age of the house</strong>.',
+                colorClass: 'border-teal-200',
+                bgClass: 'bg-teal-50',
+                iconClass: 'text-teal-500'
+            },
+            {
+                id: 'logistic-regression',
+                term: 'Logistic Regression',
+                emoji: '🔮',
+                category: 'tests',
+                definition: 'A regression model used when the outcome you are trying to predict is binary (only has two possible outcomes, like Yes/No or Pass/Fail).',
+                example: 'Predicting whether a patient will develop heart disease <strong>(Yes or No)</strong> based on their age, weight, and blood pressure.',
+                colorClass: 'border-teal-200',
+                bgClass: 'bg-teal-50',
+                iconClass: 'text-teal-500'
+            },
+            {
+                id: 'ordinal-regression',
+                term: 'Ordinal Regression',
+                emoji: '📶',
+                category: 'tests',
+                definition: 'A regression model used to predict an outcome that has a set, ranked order (ordinal data), but the distances between ranks aren\'t necessarily equal.',
+                example: 'Predicting a patient\'s pain level <strong>(None, Mild, Moderate, Severe)</strong> based on the dosage of medicine they were given.',
+                colorClass: 'border-teal-200',
+                bgClass: 'bg-teal-50',
+                iconClass: 'text-teal-500'
+            },
+
+            // --- ERRORS & BIASES ---
+            {
+                id: 'type-1-error',
+                term: 'Type I Error (False Positive)',
+                emoji: '🚨',
+                category: 'errors',
+                definition: 'Rejecting a null hypothesis that is actually true in the population. You think you found an effect, but it\'s just noise.',
+                example: 'A test tells a healthy man he is pregnant. (The test incorrectly flagged a condition that doesn\'t exist).',
+                colorClass: 'border-red-200',
+                bgClass: 'bg-red-50',
+                iconClass: 'text-red-500'
+            },
+            {
+                id: 'type-2-error',
+                term: 'Type II Error (False Negative)',
+                emoji: '🙈',
+                category: 'errors',
+                definition: 'Failing to reject a null hypothesis that is actually false. You missed a real effect.',
+                example: 'A test tells a woman who is 8 months pregnant that she is NOT pregnant. (The test missed an obvious condition).',
+                colorClass: 'border-red-200',
+                bgClass: 'bg-red-50',
+                iconClass: 'text-red-500'
+            },
+            {
+                id: 'selection-bias',
+                term: 'Selection Bias',
+                emoji: '🧲',
+                category: 'errors',
+                definition: 'Occurs when the sample data gathered aren’t representative of the true future population of cases that the model will see.',
+                example: 'Conducting a survey about internet usage but <strong>only calling landline phone numbers</strong>. You systematically exclude young people who only use cell phones.',
+                colorClass: 'border-red-200',
+                bgClass: 'bg-red-50',
+                iconClass: 'text-red-500'
+            },
+            {
+                id: 'confounding-variable',
+                term: 'Confounding Variable',
+                emoji: '👻',
+                category: 'errors',
+                definition: 'An unmeasured third variable that influences both the supposed cause and the supposed effect, creating a spurious association.',
+                example: 'Data shows a strong correlation between <strong>ice cream sales and shark attacks</strong>. The confounding variable is <strong>Summer/Hot Weather</strong>, which causes both to rise independently.',
+                colorClass: 'border-red-200',
+                bgClass: 'bg-red-50',
+                iconClass: 'text-red-500'
+            }
+        ];
+
+        // 2. DOM Elements & State
+        const termsContainer = document.getElementById('termsContainer');
+        const searchInput = document.getElementById('searchInput');
+        const categoryButtons = document.querySelectorAll('.category-btn');
+        const currentCategoryTitle = document.getElementById('currentCategoryTitle');
+        const termCount = document.getElementById('termCount');
+        const noResults = document.getElementById('noResults');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+
+        let currentCategory = 'all';
+        let searchQuery = '';
+
+        // 3. Render Function
+        function renderTerms() {
+            termsContainer.innerHTML = ''; // Clear current
+            
+            // Filter logic
+            const filteredTerms = statisticalTerms.filter(item => {
+                const matchesCategory = currentCategory === 'all' || item.category === currentCategory;
+                const searchLower = searchQuery.toLowerCase();
+                const matchesSearch = item.term.toLowerCase().includes(searchLower) || 
+                                      item.definition.toLowerCase().includes(searchLower) ||
+                                      item.example.toLowerCase().includes(searchLower);
+                return matchesCategory && matchesSearch;
+            });
+
+            // Update Count
+            termCount.textContent = `${filteredTerms.length} Term${filteredTerms.length !== 1 ? 's' : ''}`;
+
+            // Handle Empty State
+            if (filteredTerms.length === 0) {
+                noResults.classList.remove('hidden');
+            } else {
+                noResults.classList.add('hidden');
+                
+                // Build HTML for each term
+                filteredTerms.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = `term-card bg-white rounded-xl shadow-sm border ${item.colorClass} overflow-hidden cursor-pointer group`;
+                    
+                    // Highlight search text if exists
+                    let displayTerm = item.term;
+                    if (searchQuery) {
+                        const regex = new RegExp(`(${searchQuery})`, 'gi');
+                        displayTerm = displayTerm.replace(regex, '<span class="bg-yellow-200 font-bold">$1</span>');
+                    }
+
+                    card.innerHTML = `
+                        <div class="p-6">
+                            <div class="flex justify-between items-start">
+                                <div class="flex items-center gap-3">
+                                    <div class="${item.bgClass} w-12 h-12 rounded-full flex items-center justify-center text-2xl shadow-inner">
+                                        ${item.emoji}
+                                    </div>
+                                    <h3 class="text-xl font-bold text-gray-800 group-hover:text-primary transition-colors">${displayTerm}</h3>
+                                </div>
+                                <button class="text-gray-400 hover:text-primary focus:outline-none transition-transform group-hover:scale-110 expand-btn">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="mt-4 text-gray-600 leading-relaxed">
+                                <p class="font-medium">${item.definition}</p>
+                            </div>
+                            
+                            <div class="expandable-content hidden mt-4 pt-4 border-t border-gray-100">
+                                <h4 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <i class="fas fa-lightbulb ${item.iconClass}"></i> Real-World Example
+                                </h4>
+                                <div class="${item.bgClass} rounded-lg p-4 text-gray-800 text-sm leading-relaxed border ${item.colorClass}">
+                                    ${item.example}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    // Add click event for expansion
+                    card.addEventListener('click', function() {
+                        const content = this.querySelector('.expandable-content');
+                        const icon = this.querySelector('.fa-chevron-down, .fa-chevron-up');
+                        
+                        // Toggle active class on card
+                        this.classList.toggle('active');
+
+                        if (content.classList.contains('hidden')) {
+                            content.classList.remove('hidden');
+                            // Small animation
+                            content.style.opacity = 0;
+                            setTimeout(() => content.style.opacity = 1, 50);
+                            content.style.transition = 'opacity 0.3s ease';
+                            
+                            icon.classList.remove('fa-chevron-down');
+                            icon.classList.add('fa-chevron-up');
+                        } else {
+                            content.classList.add('hidden');
+                            icon.classList.remove('fa-chevron-up');
+                            icon.classList.add('fa-chevron-down');
+                        }
+                    });
+
+                    termsContainer.appendChild(card);
+                });
+            }
+        }
+
+        // 4. Event Listeners
+        
+        // Search Input
+        searchInput.addEventListener('input', (e) => {
+            searchQuery = e.target.value;
+            renderTerms();
+        });
+
+        // Clear Search Button
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            searchQuery = '';
+            renderTerms();
+        });
+
+        // Category Buttons
+        categoryButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // Update active state styling
+                categoryButtons.forEach(b => {
+                    b.classList.remove('active', 'bg-indigo-50', 'text-indigo-700');
+                    b.classList.add('text-gray-600');
+                });
+                
+                const clickedBtn = e.currentTarget;
+                clickedBtn.classList.add('active', 'bg-indigo-50', 'text-indigo-700');
+                clickedBtn.classList.remove('text-gray-600');
+
+                // Update state and title
+                currentCategory = clickedBtn.dataset.category;
+                currentCategoryTitle.textContent = clickedBtn.textContent.trim();
+                
+                // Re-render
+                renderTerms();
+                
+                // Scroll to top of list on mobile
+                if (window.innerWidth < 768) {
+                    currentCategoryTitle.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+
+        // 5. Initial Render
+        renderTerms();
+
+    </script>
+</body>
+</html>

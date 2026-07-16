@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.output/
+*.docx
+*.xlsx
+*.csv
+!examples/*.csv
+_temp_fig.png
+node_modules/
+.venv/
+env/
+venv/
