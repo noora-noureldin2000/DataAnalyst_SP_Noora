@@ -11,6 +11,7 @@ from scipy.special import expit as plogis
 from collections import deque
 import warnings
 import networkx as nx
+from typing import List, Tuple, Optional
 
 
 class CausalDAG:
@@ -850,6 +851,124 @@ class SimpsonsParadoxVisualizer:
         if output_path:
             fig.savefig(output_path, dpi=150, bbox_inches="tight")
         return fig
+
+
+class PropensityScoreMatcher:
+    """Propensity Score Matching for causal inference in observational studies."""
+
+    def __init__(self, caliper: float = 0.1):
+        self.caliper = caliper
+        self.match_model = None
+        self.matched_data = None
+        self.propensity_scores = None
+
+    def estimate_scores(self, data: pd.DataFrame, treatment: str, covariates: List[str]) -> np.ndarray:
+        X = data[covariates].fillna(data[covariates].mean())
+        X = sm.add_constant(X)
+        y = data[treatment].values
+        model = sm.Logit(y, X).fit(disp=False)
+        self.propensity_scores = model.predict(X)
+        return self.propensity_scores
+
+    def match(self, data: pd.DataFrame, treatment: str, covariates: List[str],
+              method: str = 'nearest', ratio: int = 1) -> pd.DataFrame:
+        scores = self.estimate_scores(data, treatment, covariates)
+        treated_idx = np.where(data[treatment].values == 1)[0]
+        control_idx = np.where(data[treatment].values == 0)[0]
+
+        scores_treated = scores[treated_idx]
+        scores_control = scores[control_idx]
+
+        sd_scores = np.std(scores)
+        caliper_dist = self.caliper * sd_scores
+
+        matched_pairs = []
+        used_controls = set()
+
+        for t_idx, t_score in zip(treated_idx, scores_treated):
+            dists = np.abs(scores_control - t_score)
+            valid = np.where((dists <= caliper_dist) & (~np.isin(control_idx, list(used_controls))))[0]
+            if len(valid) == 0:
+                continue
+            valid_sorted = valid[np.argsort(dists[valid])]
+            n_match = min(ratio, len(valid_sorted))
+            for m_idx in valid_sorted[:n_match]:
+                matched_pairs.append((t_idx, control_idx[m_idx]))
+                used_controls.add(control_idx[m_idx])
+
+        matched_indices = set()
+        for t, c in matched_pairs:
+            matched_indices.add(t)
+            matched_indices.add(c)
+        self.matched_data = data.loc[list(matched_indices)].copy()
+        self.matched_data['ps_weight'] = 1.0
+        self.matched_data['ps_score'] = scores[list(matched_indices)]
+        self.matched_data['ps_pair'] = 0
+        for i, (t, c) in enumerate(matched_pairs):
+            self.matched_data.loc[t, 'ps_pair'] = i
+            self.matched_data.loc[c, 'ps_pair'] = i
+        return self.matched_data
+
+    def balance_summary(self) -> pd.DataFrame:
+        if self.matched_data is None:
+            raise ValueError("Run match() first")
+        return self.matched_data.groupby('treatment').agg(['mean', 'std']).T
+
+    def love_plot(self, data: pd.DataFrame, treatment: str, covariates: List[str],
+                  figsize: Tuple[float, float] = (8, 6)) -> plt.Figure:
+        palette = ['#00468B', '#ED0000']
+        fig, ax = plt.subplots(figsize=figsize, dpi=150)
+        smd_before = []
+        smd_after = []
+        matched = self.matched_data
+        for cov in covariates:
+            if data[cov].dtype in (np.int64, np.float64):
+                m0 = data.loc[data[treatment] == 0, cov].mean()
+                m1 = data.loc[data[treatment] == 1, cov].mean()
+                s0 = data.loc[data[treatment] == 0, cov].std()
+                s1 = data.loc[data[treatment] == 1, cov].std()
+                smd_b = abs(m1 - m0) / np.sqrt((s0**2 + s1**2) / 2) if (s0 + s1) > 0 else 0
+                m0_m = matched.loc[matched[treatment] == 0, cov].mean() if matched[treatment].nunique() > 1 else 0
+                m1_m = matched.loc[matched[treatment] == 1, cov].mean() if matched[treatment].nunique() > 1 else 0
+                s0_m = matched.loc[matched[treatment] == 0, cov].std() if matched[treatment].nunique() > 1 else 0
+                s1_m = matched.loc[matched[treatment] == 1, cov].std() if matched[treatment].nunique() > 1 else 0
+                smd_a = abs(m1_m - m0_m) / np.sqrt((s0_m**2 + s1_m**2) / 2) if (s0_m + s1_m) > 0 else 0
+            else:
+                continue
+            smd_before.append(smd_b)
+            smd_after.append(smd_a)
+
+        y_pos = np.arange(len(covariates))
+        ax.scatter(smd_before, y_pos, color=palette[0], s=60, zorder=3, label='Unmatched', marker='o')
+        ax.scatter(smd_after, y_pos, color=palette[1], s=60, zorder=3, label='Matched', marker='s')
+        for i in range(len(covariates)):
+            ax.plot([smd_before[i], smd_after[i]], [y_pos[i], y_pos[i]], color='gray', lw=0.8, alpha=0.5)
+        ax.axvline(0.1, color='gray', linestyle='--', alpha=0.5, label='Threshold (0.1)')
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(covariates, fontsize=10)
+        ax.set_xlabel('Absolute Standardized Mean Difference', fontsize=11)
+        ax.set_title('Covariate Balance: Love Plot', fontsize=13, fontweight='bold')
+        ax.legend(fontsize=9, frameon=True, edgecolor='lightgray')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.grid(axis='x', alpha=0.3, linestyle=':')
+        fig.tight_layout()
+        return fig
+
+    @staticmethod
+    def simulate_confounded_data(n: int = 400) -> pd.DataFrame:
+        np.random.seed(123)
+        age = np.round(np.random.normal(55, 10, n))
+        health_score = np.round(np.random.normal(60, 12, n) - 0.2 * age)
+        gender = np.random.binomial(1, 0.5, n)
+        logits = -3.5 + 0.04 * age + 0.05 * health_score - 0.2 * gender
+        prob_tx = 1.0 / (1.0 + np.exp(-logits))
+        treatment = np.random.binomial(1, prob_tx)
+        recovery = np.round(15 - 3 * treatment + 0.1 * age - 0.12 * health_score + np.random.normal(0, 3, n))
+        return pd.DataFrame({
+            'id': range(1, n+1), 'treatment': treatment, 'age': age,
+            'health_score': health_score, 'gender': gender, 'recovery_time': recovery
+        })
 
 
 class DAGDataSimulator:

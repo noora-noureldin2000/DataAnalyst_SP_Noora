@@ -21,6 +21,8 @@ Usage:
 import argparse
 import sys
 import os
+import json
+import subprocess
 from typing import Optional, Dict, List, Tuple
 
 import numpy as np
@@ -29,18 +31,27 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy import stats as scipy_stats
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from agent_core.data_cleaning import DataCleaner
+from agent_core.data_cleaning import DataCleaner, MICEImputer
 from agent_core.stats_enhanced import (
     DescriptiveStatsEnhanced, PValueFormatter, GamesHowellPostHoc,
     StandardizedCoefficients, InfluenceDiagnostics
 )
 from agent_core.analysis_planner import StatisticalPlanner
 from agent_core.report_generator import ReportGenerator
-from agent_core.diagnostic_toolkit import ROC_Analysis
+from agent_core.diagnostic_toolkit import ROC_Analysis, DiagnosticAccuracy
 from agent_core.word_exporter import APAWordExporter
+from agent_core.visual_style import set_publication_style, get_palette, apply_figure_style
+from agent_core.meta_analysis import MetaPoolingEngine, MetaVisualizer, EffectSizeConverter
+from agent_core.causal_inference import PropensityScoreMatcher
+from agent_core.biostats import ClinicalRegressionSuite
+
+
+# Apply publication-quality style globally
+set_publication_style(palette='lancet', dpi=800)
 
 
 def read_excel(filepath: str) -> pd.DataFrame:
@@ -163,33 +174,61 @@ def run_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[str
     return results
 
 
-def make_forest_plot(results: Dict, title: str = "Forest Plot") -> plt.Figure:
+def make_forest_plot(results: Dict, pvalues: Dict = None, title: str = "Forest Plot") -> plt.Figure:
+    palette = get_palette('lancet')
     coef = results['coef']
     ci = results['conf_int']
     or_vals = np.exp(coef)
     or_ci_low = np.exp(ci[0])
     or_ci_high = np.exp(ci[1])
+    if pvalues is None:
+        pvalues = results.get('pvalues', {})
 
     params = coef.index
-    fig, ax = plt.subplots(figsize=(8, max(4, len(params) * 0.4)))
+    params = params[params != 'const'] if 'const' in params else params
+    or_vals = or_vals[params]
+    or_ci_low = or_ci_low[params]
+    or_ci_high = or_ci_high[params]
+
+    fig, ax = plt.subplots(figsize=(9, max(4.5, len(params) * 0.45)))
     y_pos = np.arange(len(params))
 
-    ax.errorbar(or_vals.values, y_pos,
-                xerr=[or_vals.values - or_ci_low.values, or_ci_high.values - or_vals.values],
-                fmt='o', color='#0D9488', ecolor='gray', capsize=3, markersize=7)
-    ax.axvline(x=1, color='red', linestyle='--', alpha=0.5)
+    for i, (p, lo, hi) in enumerate(zip(params, or_ci_low, or_ci_high)):
+        pv = pvalues.get(p, 1)
+        if pv < 0.001:
+            marker_color = palette[0]
+            sig_label = '***'
+        elif pv < 0.01:
+            marker_color = palette[1]
+            sig_label = '**'
+        elif pv < 0.05:
+            marker_color = palette[2]
+            sig_label = '*'
+        else:
+            marker_color = '#BBBBBB'
+            sig_label = ''
+        ax.errorbar(or_vals[p], y_pos[i],
+                    xerr=[[or_vals[p] - lo], [hi - or_vals[p]]],
+                    fmt='o', color=marker_color, ecolor='gray', capsize=3, markersize=8, zorder=3)
+        val_text = f'{or_vals[p]:.2f} [{lo:.2f}, {hi:.2f}] {sig_label}'
+        ax.text(hi * 1.05, y_pos[i], val_text, va='center', fontsize=8, color='#333333')
+
+    ax.axvline(x=1, color='red', linestyle='--', alpha=0.5, linewidth=1)
     ax.set_yticks(y_pos)
-    ax.set_yticklabels(params, fontsize=9)
+    ax.set_yticklabels(params, fontsize=10)
     ax.set_xlabel('Adjusted Odds Ratio (95% CI)', fontsize=11)
     ax.set_title(title, fontsize=13, fontweight='bold')
     ax.set_xscale('log')
-    ax.grid(axis='x', alpha=0.3)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.grid(axis='x', alpha=0.3, linestyle=':')
     fig.tight_layout()
     return fig
 
 
 def make_boxplots(df: pd.DataFrame, outcome: str, continuous_vars: List[str],
                   max_vars: int = 9) -> List[plt.Figure]:
+    palette = get_palette('lancet')
     vars_to_plot = [v for v in continuous_vars if v != outcome][:max_vars]
     figs = []
     n_cols = 3
@@ -204,12 +243,14 @@ def make_boxplots(df: pd.DataFrame, outcome: str, continuous_vars: List[str],
         labels = [str(l) for l, _ in groups]
         bp = ax.boxplot(data, patch_artist=True)
         ax.set_xticklabels(labels)
-        colors = ['#E8F5E9', '#FFEBEE']
-        for patch, color in zip(bp['boxes'], colors):
+        for patch, color in zip(bp['boxes'], palette[:2]):
             patch.set_facecolor(color)
-        ax.set_title(var, fontsize=10)
+            patch.set_alpha(0.7)
+        ax.set_title(var, fontsize=10, fontweight='bold')
         ax.set_ylabel('Value', fontsize=9)
         ax.tick_params(labelsize=8)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
 
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
@@ -222,6 +263,7 @@ def make_boxplots(df: pd.DataFrame, outcome: str, continuous_vars: List[str],
 
 def make_barplots(df: pd.DataFrame, outcome: str, categorical_vars: List[str],
                   max_vars: int = 6) -> List[plt.Figure]:
+    palette = get_palette('lancet')
     vars_to_plot = [v for v in categorical_vars if v != outcome][:max_vars]
     figs = []
     n_cols = 2
@@ -236,11 +278,13 @@ def make_barplots(df: pd.DataFrame, outcome: str, categorical_vars: List[str],
     for i, var in enumerate(vars_to_plot):
         ax = axes[i]
         ct = pd.crosstab(df[var], df[outcome], normalize='columns') * 100
-        ct.plot(kind='bar', ax=ax, color=['#66BB6A', '#EF5350'], legend=False)
-        ax.set_title(var, fontsize=10)
+        ct.plot(kind='bar', ax=ax, color=[palette[0], palette[1]], legend=False, alpha=0.85)
+        ax.set_title(var, fontsize=10, fontweight='bold')
         ax.set_ylabel('Percentage (%)', fontsize=9)
         ax.tick_params(labelsize=8)
         ax.legend(title=outcome, fontsize=7)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
 
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
@@ -252,37 +296,51 @@ def make_barplots(df: pd.DataFrame, outcome: str, categorical_vars: List[str],
 
 
 def make_scatter_plot(df: pd.DataFrame, outcome: str, x_var: str, y_var: str) -> plt.Figure:
+    palette = get_palette('lancet')
     fig, ax = plt.subplots(figsize=(7, 5))
-    for group in df[outcome].unique():
+    for idx, group in enumerate(df[outcome].unique()):
         subset = df[df[outcome] == group]
-        ax.scatter(subset[x_var], subset[y_var], alpha=0.5, label=group, s=20)
+        color = palette[idx % len(palette)]
+        ax.scatter(subset[x_var], subset[y_var], alpha=0.6, label=group, s=25, color=color, edgecolors='white', linewidth=0.3)
         if len(subset) > 3:
             z = np.polyfit(subset[x_var].dropna(), subset[y_var].dropna(), 1)
             p = np.poly1d(z)
             x_line = np.linspace(subset[x_var].min(), subset[x_var].max(), 100)
-            ax.plot(x_line, p(x_line), lw=1.5)
+            ax.plot(x_line, p(x_line), lw=1.5, color=color, alpha=0.7)
     ax.set_xlabel(x_var, fontsize=11)
     ax.set_ylabel(y_var, fontsize=11)
     ax.set_title(f'{y_var} vs {x_var} by {outcome}', fontsize=12, fontweight='bold')
-    ax.legend(fontsize=9)
-    ax.grid(alpha=0.3)
+    ax.legend(fontsize=9, frameon=True, edgecolor='lightgray')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.grid(alpha=0.3, linestyle=':')
     fig.tight_layout()
     return fig
 
 
+def format_p(pv: float) -> str:
+    if pv < 0.001:
+        return "p < .001"
+    return f"p = {pv:.3f}".replace("0.", ".")
+
+
 def generate_narrative(outcome: str, table1_rows: List[List[str]],
-                       logit_results: Dict, auc_val: Optional[float]) -> str:
+                       logit_results: Dict, auc_val: Optional[float],
+                       psm_results: Optional[Dict] = None) -> str:
     lines = []
 
-    n_total_line = [r for r in table1_rows if 'Age' in r[0] or 'age' in r[0].lower()]
     lines.append(f"A total of {len(table1_rows)} candidate predictors were evaluated "
                  f"for their association with {outcome}.")
 
-    sig_continuous = [r for r in table1_rows if len(r) > 4 and '<.001' in r[4] or (r[4].startswith('.') and float(r[4]) < 0.05)]
-    if sig_continuous:
-        vars_str = ', '.join(r[0] for r in sig_continuous[:5])
-        lines.append(f"Bivariate analysis revealed significant associations between {outcome} and "
-                     f"{vars_str} (all p < .05).")
+    sig_vars = []
+    for r in table1_rows:
+        if len(r) >= 5:
+            pv_text = r[4]
+            if pv_text.startswith('<') or (pv_text.startswith('.') and float(pv_text) < 0.05):
+                sig_vars.append(r[0])
+    if sig_vars:
+        vars_str = ', '.join(sig_vars[:5])
+        lines.append(f"Bivariate analysis (")
 
     if logit_results and 'error' not in logit_results:
         sig_preds = []
@@ -294,30 +352,48 @@ def generate_narrative(outcome: str, table1_rows: List[List[str]],
                 or_hi = np.exp(ci[1][var])
                 sig_preds.append(f"{var} (aOR = {or_val:.3f}, 95% CI [{or_lo:.3f}, {or_hi:.3f}])")
 
-        lines.append(f"Multivariable logistic regression identified {len(sig_preds)} "
-                     f"independent predictors of {outcome}: {'; '.join(sig_preds)}.")
+        if sig_preds:
+            lines.append(f"Multivariable logistic regression identified {len(sig_preds)} "
+                         f"independent predictor{'s' if len(sig_preds) > 1 else ''} of {outcome}: "
+                         f"{'; '.join(sig_preds)}.")
 
         pseudo_r2 = logit_results.get('pseudo_r2', 0)
+        nobs = logit_results.get('nobs', 0)
+        aic = logit_results.get('aic', 0)
         lines.append(f"The model explained {pseudo_r2*100:.1f}% of the variance "
-                     f"(McFadden's pseudo-R² = {pseudo_r2:.3f}).")
+                     f"(McFadden pseudo-R² = {pseudo_r2:.3f}, AIC = {aic:.1f}, N = {nobs}).")
 
         if auc_val:
-            lines.append(f"The model demonstrated {'excellent' if auc_val > 0.8 else 'good' if auc_val > 0.7 else 'moderate'} "
-                         f"discrimination with an AUC of {auc_val:.3f}.")
+            qual = 'excellent' if auc_val > 0.9 else 'good' if auc_val > 0.8 else 'fair' if auc_val > 0.7 else 'poor'
+            lines.append(f"The model demonstrated {qual} discriminatory performance "
+                         f"(AUC = {auc_val:.3f}).")
+
+        sig_count = len(sig_preds)
+        if sig_count > 0:
+            lines.append(f"These findings suggest that {sig_preds[0].split(' (')[0] if sig_preds else 'the identified factors'} "
+                         f"may serve as independent predictors of {outcome}, after adjusting for confounders.")
+
+    if psm_results:
+        lines.append(f"Propensity score matching yielded {psm_results.get('matched_n', 0)} "
+                     f"matched observations, reducing confounding by indication.")
 
     return '\n'.join(lines)
 
 
 def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
-                      outcome_var: str = "", generate_plots: bool = True) -> Dict:
+                      outcome_var: str = "", generate_plots: bool = True,
+                      use_mice: bool = False, run_psm: bool = False,
+                      journal_format: str = "", validate_refs: bool = False) -> Dict:
     print(f"[1/9] Reading data from {data_path}...")
     df = read_excel(data_path)
     print(f"  Loaded {df.shape[0]} rows x {df.shape[1]} columns")
 
     print(f"[2/9] Cleaning data...")
     cleaner = DataCleaner(df)
-    cleaner.clean_pipeline()
+    cleaner.clean_pipeline(use_mice=use_mice)
     df_clean = cleaner.get_cleaned_df()
+    cleaning_report = cleaner.get_report()
+    cleaning_audit = cleaner.get_audit()
 
     outcome = auto_detect_outcome(df_clean, study_brief, outcome_var)
     print(f"  Outcome variable: {outcome}")
@@ -337,10 +413,31 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
     plan_type = plan[0].get('type', 'standard') if plan else 'standard'
     print(f"  Plan steps: {len(plan)}")
 
+    auc_val = None
+    psm_results = None
+
     print(f"[5/9] Building Table 1 (baseline characteristics)...")
     headers, table1_rows = build_table1(df_clean, outcome, var_types,
                                          continuous_vars, categorical_vars)
     print(f"  Table 1: {len(table1_rows)} rows")
+
+    if run_psm:
+        print(f"[5b/9] Running Propensity Score Matching...")
+        treatment_var = outcome
+        psm_covariates = [v for v in continuous_vars + categorical_vars if v != outcome]
+        if len(psm_covariates) >= 2 and df_clean[outcome].nunique() == 2:
+            matcher = PropensityScoreMatcher(caliper=0.1)
+            try:
+                matched_df = matcher.match(df_clean, treatment_var, psm_covariates)
+                fig_love = matcher.love_plot(df_clean, treatment_var, psm_covariates)
+                print(f"  PSM: matched {len(matched_df)} observations")
+                psm_results = {'matched_n': len(matched_df), 'figure': fig_love}
+            except Exception as e:
+                print(f"  PSM skipped: {e}")
+                psm_results = None
+        else:
+            print(f"  PSM: need binary outcome + 2+ covariates")
+            psm_results = None
 
     print(f"[6/9] Running multivariable regression...")
     predictors = continuous_vars + categorical_vars
@@ -362,8 +459,11 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
                 roc = ROC_Analysis(y_true, y_score)
                 roc_res = roc.compute()
                 auc_val = roc_res.get('auc', roc_res.get('AUC'))
-                fig_roc = roc.plot_roc()
+                opt = roc.optimal_cutoff(method='youden')
+                fig_roc = roc.plot_roc(annotate_cutoff=True, optimal_cutoff=opt)
                 figs.append(('ROC Curve', fig_roc))
+                print(f"  ROC AUC = {auc_val:.3f}, optimal cutoff = {opt.get('threshold', 0):.3f} "
+                      f"(sens={opt.get('sensitivity', 0):.3f}, spec={opt.get('specificity', 0):.3f})")
             except Exception as e:
                 print(f"  ROC curve skipped: {e}")
                 auc_val = None
@@ -395,9 +495,11 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
             except Exception as e:
                 print(f"  Scatter plot skipped: {e}")
 
+        if psm_results and psm_results.get('figure'):
+            figs.append(('Love Plot', psm_results['figure']))
+
     print(f"[8/9] Generating narrative...")
-    narrative = generate_narrative(outcome, table1_rows, logit_results,
-                                    auc_val if 'auc_val' in dir() else None)
+    narrative = generate_narrative(outcome, table1_rows, logit_results, auc_val, psm_results)
 
     print(f"[9/9] Exporting Word document to {output_path}...")
     exporter = APAWordExporter(f"Analysis of {outcome}")
@@ -409,7 +511,15 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
                            f"among the study population. A total of {len(df_clean)} patients were analyzed.")
 
     exporter.add_heading("2. Data Cleaning Methodology", level=1)
-    exporter.add_paragraph(cleaner.get_report()[:2000])
+    exporter.add_paragraph(cleaning_report[:2000])
+
+    if validate_refs:
+        try:
+            ref_report_path = output_path.replace('.docx', '_ref_validation.json')
+            validate_references_simple(study_brief, ref_report_path)
+            exporter.add_paragraph(f"References were validated. Report saved to {ref_report_path}")
+        except Exception as e:
+            print(f"  Reference validation skipped: {e}")
 
     exporter.add_heading("3. Table 1: Baseline Characteristics", level=1)
     exp_headers = ['Variable', f'Without {outcome}', f'With {outcome}', 'Test', 'p', 'Effect Size']
@@ -459,6 +569,9 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
                                              f"Vertical dashed line at aOR = 1.0.")
         elif label == 'Scatter Plot':
             exporter.add_figure(fig, caption=f"Relationship between key continuous variables by {outcome} status.")
+        elif label == 'Love Plot':
+            exporter.add_figure(fig, caption=f"Covariate balance plot (Love plot) comparing standardized mean "
+                                             f"differences before and after propensity score matching.")
 
     exporter.add_heading("7. Discussion and Conclusions", level=1)
     exporter.add_paragraph(narrative)
@@ -470,6 +583,53 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
     return {'status': 'success', 'output': output_path, 'rows': len(table1_rows)}
 
 
+def run_meta_analysis_simple(effect_sizes: List[float], variances: List[float],
+                              study_labels: List[str], measure_name: str = "OR") -> Dict:
+    engine = MetaPoolingEngine()
+    visualizer = MetaVisualizer()
+    result = engine.pool(effect_sizes, variances, method="random")
+    result['study_labels'] = study_labels
+    result['individual_effects'] = effect_sizes
+    result['individual_variances'] = variances
+    result['measure_name'] = measure_name
+    result['forest_path'] = 'forest_plot.png'
+    result['funnel_path'] = 'funnel_plot.png'
+    try:
+        visualizer.plot_forest(study_labels, effect_sizes, variances, result, sm_name=measure_name)
+    except Exception as e:
+        print(f"  Forest plot save error: {e}")
+    try:
+        visualizer.plot_funnel(effect_sizes, variances, result['pooled_effect'], sm_name=measure_name)
+    except Exception as e:
+        print(f"  Funnel plot save error: {e}")
+    return result
+
+
+def validate_references_simple(text: str, output_path: str = "") -> dict:
+    import re as _re
+    dois = _re.findall(r'10\.\d{4,9}/[-._;()/:A-Za-z0-9]+', text)
+    result = {'n_references_found': len(dois), 'dois': dois, 'validated': []}
+    try:
+        import requests as _req
+        for doi in dois[:10]:
+            url = f"https://api.crossref.org/works/{doi}"
+            resp = _req.get(url, headers={'User-Agent': 'DataAnalyst/1.0'}, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                title = data.get('message', {}).get('title', [''])[0]
+                result['validated'].append({'doi': doi, 'status': 'valid', 'title': title})
+            else:
+                result['validated'].append({'doi': doi, 'status': 'not_found'})
+    except ImportError:
+        result['error'] = 'requests not installed'
+    except Exception as e:
+        result['error'] = str(e)
+    if output_path:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description='Medical Research Data Analysis Pipeline')
     parser.add_argument('--data', '-d', required=True, help='Path to Excel data file (.xlsx/.csv)')
@@ -477,15 +637,43 @@ def main():
     parser.add_argument('--brief', '-b', default='', help='Study protocol / research brief text')
     parser.add_argument('--outcome', '-dv', default='', help='Outcome/dependent variable name')
     parser.add_argument('--no-plots', action='store_true', help='Skip figure generation')
+    parser.add_argument('--mice', action='store_true', help='Use MICE multiple imputation instead of single imputation')
+    parser.add_argument('--psm', action='store_true', help='Run propensity score matching (requires binary outcome)')
+    parser.add_argument('--journal', '-j', default='', choices=['mdpi', 'elsevier', ''],
+                        help='Format output for specific journal (MDPI or Elsevier)')
+    parser.add_argument('--validate-refs', action='store_true', help='Validate references in study brief')
+    parser.add_argument('--palette', default='lancet', choices=['lancet', 'nejm', 'jama', 'nature', 'colorblind'],
+                        help='Color palette for figures (default: lancet)')
     args = parser.parse_args()
+
+    set_publication_style(palette=args.palette, dpi=800)
 
     result = run_full_pipeline(
         data_path=args.data,
         output_path=args.output,
         study_brief=args.brief,
         outcome_var=args.outcome,
-        generate_plots=not args.no_plots
+        generate_plots=not args.no_plots,
+        use_mice=args.mice,
+        run_psm=args.psm,
+        journal_format=args.journal,
+        validate_refs=args.validate_refs
     )
+
+    if args.journal:
+        try:
+            journal_script = os.path.join(os.path.dirname(__file__), '..', 'format_journal_cli.py')
+            if os.path.exists(journal_script):
+                subprocess.run([
+                    sys.executable, journal_script,
+                    '--input', result.get('output', args.output),
+                    '--format', args.journal,
+                    '--output', result.get('output', args.output).replace('.docx', f'_{args.journal}.docx')
+                ], check=False)
+                print(f"  Journal-formatted version saved.")
+        except Exception as e:
+            print(f"  Journal formatting skipped: {e}")
+
     return result
 
 

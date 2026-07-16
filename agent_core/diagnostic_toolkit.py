@@ -221,7 +221,8 @@ class ROC_Analysis:
             })
         return pd.DataFrame(rows)
 
-    def plot_roc(self, figsize: Tuple[float, float] = (8, 6)) -> plt.Figure:
+    def plot_roc(self, figsize: Tuple[float, float] = (8, 6), annotate_cutoff: bool = False,
+                 optimal_cutoff: Optional[dict] = None) -> plt.Figure:
         self._compute_curve()
         auc = self._compute_auc()
         fig, ax = plt.subplots(figsize=figsize, dpi=150)
@@ -256,9 +257,22 @@ class ROC_Analysis:
             tpr_upper = np.percentile(tpr_boot, 97.5, axis=0)
             ax.fill_between(fpr_grid, tpr_lower, tpr_upper, alpha=0.15, color="#1f77b4",
                             label=f"95% CI (bootstrap)")
-        ax.plot(self._fpr, self._tpr, color="#1f77b4", linewidth=2, zorder=3,
+        ax.plot(self._fpr, self._tpr, color="#00468B", linewidth=2, zorder=3,
                 label=f"ROC (AUC = {auc:.3f})")
         ax.plot([0, 1], [0, 1], "k--", linewidth=0.8, alpha=0.5, label="Chance")
+
+        if annotate_cutoff and optimal_cutoff:
+            th = optimal_cutoff.get('threshold', 0)
+            sens = optimal_cutoff.get('sensitivity', 0)
+            spec = optimal_cutoff.get('specificity', 0)
+            fpr_at = 1.0 - spec
+            ax.plot(fpr_at, sens, 'o', color='#ED0000', markersize=10, zorder=4, label=f'Optimal cutoff')
+            ax.annotate(f'Cutoff = {th:.2f}\nSens = {sens:.3f}, Spec = {spec:.3f}',
+                        xy=(fpr_at, sens), xytext=(fpr_at + 0.15, sens - 0.15),
+                        fontsize=8, color='#333333',
+                        arrowprops=dict(arrowstyle='->', color='gray', lw=0.8),
+                        bbox=dict(facecolor='white', alpha=0.8, edgecolor='lightgray', boxstyle='round,pad=0.3'))
+
         ax.set_xlabel("1 - Specificity (False Positive Rate)", fontweight="bold")
         ax.set_ylabel("Sensitivity (True Positive Rate)", fontweight="bold")
         ax.set_title("Receiver Operating Characteristic (ROC) Curve", fontweight="bold")
@@ -266,7 +280,8 @@ class ROC_Analysis:
         ax.set_xlim(-0.02, 1.02)
         ax.set_ylim(-0.02, 1.02)
         ax.grid(True, linestyle=":", alpha=0.4)
-        ax.text(0.02, 0.02, f"n = {self._n} (pos = {self._n_pos}, neg = {self._n_neg})",
+        auc_text = f"AUC = {auc:.3f}" + (f" (95% CI: {lower_ci:.3f}-{upper_ci:.3f})" if len(boot_aucs) > 10 else "")
+        ax.text(0.02, 0.02, f"n = {self._n} (pos = {self._n_pos}, neg = {self._n_neg})\n{auc_text}",
                 transform=ax.transAxes, fontsize=8, va="bottom",
                 bbox=dict(facecolor="white", alpha=0.8, edgecolor="lightgray", boxstyle="round,pad=0.3"))
         fig.tight_layout()

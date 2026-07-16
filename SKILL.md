@@ -255,6 +255,55 @@ exporter.save("output_report.docx")
 
 ---
 
+## APA Statistical Reporting Templates
+
+Use these sentence templates for standard APA-formatted results:
+
+**Independent t-test**:
+> An independent-samples *t*-test was conducted to compare [DV] between [group1] and [group2]. There was [no] a significant difference in scores between [group1] (*M* = [mean], *SD* = [sd]) and [group2] (*M* = [mean], *SD* = [sd]); *t*([df]) = [t], *p* = [p], Cohen's *d* = [d].
+
+**Paired t-test**:
+> A paired-samples *t*-test was conducted to compare [DV] before and after [intervention]. Results showed [no] a significant difference between pre-intervention (*M* = [mean], *SD* = [sd]) and post-intervention (*M* = [mean], *SD* = [sd]); *t*([df]) = [t], *p* = [p], Cohen's *d* = [d].
+
+**Mann-Whitney U test**:
+> A Mann-Whitney *U* test indicated that [DV] was [not] significantly different between [group1] (*Mdn* = [median]) and [group2] (*Mdn* = [median]); *U* = [U], *p* = [p], rank-biserial *r* = [r].
+
+**Wilcoxon signed-rank test**:
+> A Wilcoxon signed-rank test showed that [intervention] elicited [no] a statistically significant change in [DV] (*Z* = [Z], *p* = [p], rank-biserial *r* = [r]).
+
+**One-way ANOVA**:
+> A one-way ANOVA revealed [no] a statistically significant difference in [DV] across [groups]; *F*([df1], [df2]) = [F], *p* = [p], partial η² = [eta2]. Post-hoc comparisons using Tukey HSD indicated that [specific group comparisons].
+
+**Kruskal-Wallis test**:
+> A Kruskal-Wallis *H* test showed [no] a statistically significant difference in [DV] across [groups]; *H*([df]) = [H], *p* = [p], ε² = [epsilon2].
+
+**Chi-square test of independence**:
+> A chi-square test of independence was performed examining the relationship between [var1] and [var2]. The relationship was [not] significant, χ²([df], *N* = [n]) = [chi2], *p* = [p], Cramér's *V* = [V].
+
+**Fisher's exact test**:
+> Fisher's exact test indicated [no] a significant association between [var1] and [var2] (*p* = [p], Cramér's *V* = [V]).
+
+**Pearson correlation**:
+> A Pearson correlation coefficient was computed to assess the linear relationship between [var1] and [var2]. There was [no] a significant correlation, *r*([df]) = [r], *p* = [p], 95% CI [[lower], [upper]].
+
+**Spearman correlation**:
+> A Spearman's rank-order correlation was computed to assess the relationship between [var1] and [var2]. There was [no] a significant correlation, ρ([df]) = [rho], *p* = [p].
+
+**Multiple linear regression**:
+> A multiple linear regression was calculated to predict [DV] based on [predictors]. A significant regression equation was found (*F*([df1], [df2]) = [F], *p* = [p], *R²* = [R2]). [Predictors] were significant predictors of [DV].
+
+**Binary logistic regression**:
+> A binary logistic regression was performed to ascertain the effects of [predictors] on the likelihood of [outcome]. The model was [not] statistically significant, χ²([df], *N* = [n]) = [chi2], *p* = [p], explaining [R2]% (Nagelkerke *R²*) of the variance. [Specific predictors] were [not] significant.
+
+**Cox proportional hazards regression**:
+> A Cox proportional hazards regression was performed to examine the effect of [predictors] on survival. [Predictor] was [not] significantly associated with [outcome], HR = [HR], 95% CI [[lower], [upper]], *p* = [p].
+
+**Ordinal logistic regression**:
+> An ordinal logistic regression was performed to assess the effect of [predictors] on [ordinal outcome]. The proportional odds assumption was [not] violated, χ²([df]) = [chi2], *p* = [p].
+
+**ROC analysis**:
+> ROC analysis revealed [excellent/good/fair/poor] discriminatory performance (AUC = [auc], 95% CI [[lower], [upper]]). The optimal cutoff according to Youden's index (*J* = [J]) was [threshold], yielding sensitivity = [sens] and specificity = [spec].
+
 ## Quality Standards
 
 1. **Reproducibility**: Every analysis must include the exact Python code used, with random seeds set where applicable.
@@ -262,6 +311,47 @@ exporter.save("output_report.docx")
 3. **No Hallucinations**: Never fabricate results, coefficients, or clinical metrics. If a test fails, report the error.
 4. **Formatting Excellence**: APA 7th Edition compliance for all tables, figures, and narrative text.
 5. **Clinical Relevance**: Interpret results in the context of the study, not just statistically.
+6. **Figure Quality**: Use the Figure Review Checklist before finalizing every figure.
+
+## Figure Review Checklist
+
+Before finalizing each figure, verify:
+
+### Typography
+- [ ] All text is readable (min 8pt for annotations, 10pt for labels)
+- [ ] Font sizes follow hierarchy: title > axis labels > tick labels > annotations
+- [ ] Use natural language labels (not raw variable names)
+- [ ] Units are included where applicable (e.g., "Age (years)" not "age")
+
+### Colors
+- [ ] Colorblind-safe palette used (not default matplotlib gray)
+- [ ] Muted, accessible colors — avoid neon/bright
+- [ ] Alpha/transparency used for overlapping dense data
+- [ ] Sufficient contrast between categories
+
+### Layout
+- [ ] No overlapping text or data points
+- [ ] Legend positioned optimally (top or bottom-right preferred)
+- [ ] Margins are adequate — no clipping
+- [ ] Axis ranges are appropriate (not misleading)
+
+### Theme
+- [ ] NOT using default matplotlib gray theme
+- [ ] White/transparent background
+- [ ] Grid lines are subtle (dashed, low alpha) or absent
+- [ ] Top and right spines removed
+
+### Data
+- [ ] Point sizes ≥ 2.5 for scatter plots
+- [ ] Line widths ≥ 0.8 for trend lines
+- [ ] Error bars or confidence bands included where applicable
+- [ ] Sample size (n) annotated where relevant
+- [ ] Effect sizes or test statistics annotated where applicable
+
+### Export
+- [ ] Resolution ≥ 800 DPI for print, ≥ 300 DPI for review
+- [ ] Format: PNG (review), TIFF LZW (journals), PDF/SVG (vectors)
+- [ ] File named descriptively
 
 ---
 
@@ -276,6 +366,13 @@ python run_analysis.py --data data.xlsx --outcome retinopathy --output report.do
 
 # Skip figure generation (faster)
 python run_analysis.py --data data.xlsx --no-plots --output report.docx
+
+# Advanced options
+python run_analysis.py --data data.xlsx --mice                          # MICE multiple imputation
+python run_analysis.py --data data.xlsx --psm                            # Propensity Score Matching
+python run_analysis.py --data data.xlsx --palette nejm                   # NEJM color palette
+python run_analysis.py --data data.xlsx --journal mdpi                   # Format for MDPI submission
+python run_analysis.py --data data.xlsx --validate-refs                  # Validate references in brief
 ```
 
 ## Import-based usage (for custom analysis)
