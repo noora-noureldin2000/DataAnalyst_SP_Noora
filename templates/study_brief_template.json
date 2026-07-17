@@ -1,0 +1,15 @@
+{
+  "title": "[Insert Study Title Here]",
+  "background": "[Insert brief background or rationale here]",
+  "methods_summary": "[Insert summary of study design, setting, and participants]",
+  "aims": [
+    "[Insert Primary Aim 1]",
+    "[Insert Secondary Aim 1]"
+  ],
+  "primary_outcome": "[Name of the primary outcome variable in the dataset]",
+  "secondary_outcomes": [
+    "[Name of secondary outcome variable 1]"
+  ],
+  "data_file": "[Path to data file, e.g., data.xlsx]",
+  "design": "auto"
+}

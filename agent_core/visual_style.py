@@ -26,7 +26,8 @@ def set_publication_style(palette='lancet', dpi=800, font_size=11, family='Arial
     rcParams['xtick.labelsize'] = font_size - 2
     rcParams['ytick.labelsize'] = font_size - 2
     rcParams['legend.fontsize'] = font_size - 2
-    rcParams['figure.dpi'] = 150
+    # Apply dpi param to both display and export so the argument is fully respected
+    rcParams['figure.dpi'] = min(dpi, 150)   # cap display DPI at 150 for screen usability
     rcParams['savefig.dpi'] = dpi
     rcParams['savefig.bbox'] = 'tight'
     rcParams['savefig.facecolor'] = 'white'

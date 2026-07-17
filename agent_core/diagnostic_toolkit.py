@@ -50,6 +50,9 @@ class ROC_Analysis:
         self._fpr = None
         self._thresholds = None
         self._auc = None
+        # Cache for bootstrap CI results computed in compute()
+        self._boot_ci = None        # (lower_ci, upper_ci) for AUC
+        self._tpr_band = None       # (fpr_grid, tpr_lower, tpr_upper) for CI band
 
     def _compute_curve(self):
         if self._scores is not None:
@@ -116,7 +119,15 @@ class ROC_Analysis:
         se = np.sqrt(S10 / n1 + S01 / n0)
         return se
 
-    def compute(self) -> dict:
+    def compute(self, n_boot: int = 2000) -> dict:
+        """Compute ROC statistics including bootstrap CI for the AUC.
+
+        Parameters
+        ----------
+        n_boot : int
+            Number of bootstrap iterations for the AUC confidence interval.
+            Set to 0 to skip bootstrap (uses DeLong SE instead).
+        """
         self._compute_curve()
         auc = self._compute_auc()
         n1 = self._n_pos
@@ -129,11 +140,53 @@ class ROC_Analysis:
                 "ppv": np.nan, "npv": np.nan,
                 "lr_plus": np.nan, "lr_minus": np.nan,
             }
-        se_auc = self._delong_se(auc)
-        auc_lower = auc - _Z_95 * se_auc
-        auc_upper = auc + _Z_95 * se_auc
-        auc_lower = max(0.0, auc_lower)
-        auc_upper = min(1.0, auc_upper)
+
+        # --- Bootstrap CI (computed once and cached) ---
+        if self._boot_ci is None and n_boot > 0:
+            n = len(self.y_true)
+            rng = np.random.default_rng(42)
+            boot_aucs = []
+            fpr_grid = np.linspace(0, 1, 200)
+            tpr_boot_rows = []
+            for _ in range(n_boot):
+                idx = rng.integers(0, n, size=n)
+                yt = self.y_true[idx]
+                ys = self.y_score[idx]
+                if np.sum(yt == 1) == 0 or np.sum(yt == 0) == 0:
+                    continue
+                roc_boot = ROC_Analysis(yt, ys)
+                roc_boot._compute_curve()
+                boot_aucs.append(roc_boot._compute_auc())
+                tpr_boot_rows.append(
+                    np.interp(fpr_grid, roc_boot._fpr, roc_boot._tpr, left=0, right=1)
+                )
+            boot_aucs = np.array(boot_aucs)
+            if len(boot_aucs) > 10:
+                lower_ci = float(np.percentile(boot_aucs, 2.5))
+                upper_ci = float(np.percentile(boot_aucs, 97.5))
+                tpr_mat = np.array(tpr_boot_rows)
+                tpr_lower = np.percentile(tpr_mat, 2.5, axis=0)
+                tpr_upper = np.percentile(tpr_mat, 97.5, axis=0)
+                self._boot_ci = (lower_ci, upper_ci)
+                self._tpr_band = (fpr_grid, tpr_lower, tpr_upper)
+            else:
+                # Fall back to DeLong SE
+                se_auc = self._delong_se(auc)
+                self._boot_ci = (
+                    max(0.0, auc - _Z_95 * se_auc),
+                    min(1.0, auc + _Z_95 * se_auc),
+                )
+                self._tpr_band = None
+        elif self._boot_ci is None:
+            # n_boot=0: use DeLong
+            se_auc = self._delong_se(auc)
+            self._boot_ci = (
+                max(0.0, auc - _Z_95 * se_auc),
+                min(1.0, auc + _Z_95 * se_auc),
+            )
+            self._tpr_band = None
+
+        auc_lower, auc_upper = self._boot_ci
 
         youden_idx = np.argmax(self._tpr - self._fpr)
         youden_th = self._thresholds[youden_idx]
@@ -223,40 +276,27 @@ class ROC_Analysis:
 
     def plot_roc(self, figsize: Tuple[float, float] = (8, 6), annotate_cutoff: bool = False,
                  optimal_cutoff: Optional[dict] = None) -> plt.Figure:
+        """Plot the ROC curve using pre-computed bootstrap CI from compute().
+
+        Call compute() first to run the (expensive) bootstrap CI computation.
+        If compute() has not been called, this method calls it with default n_boot=2000.
+        """
         self._compute_curve()
         auc = self._compute_auc()
+
+        # Ensure bootstrap CI is available (runs compute if not already done)
+        if self._boot_ci is None:
+            self.compute()
+
         fig, ax = plt.subplots(figsize=figsize, dpi=150)
-        n_boot = 2000
-        n = len(self.y_true)
-        rng = np.random.default_rng(42)
-        boot_aucs = []
-        for _ in range(n_boot):
-            idx = rng.integers(0, n, size=n)
-            yt = self.y_true[idx]
-            ys = self.y_score[idx]
-            if np.sum(yt == 1) == 0 or np.sum(yt == 0) == 0:
-                continue
-            roc_boot = ROC_Analysis(yt, ys)
-            boot_aucs.append(roc_boot._compute_auc())
-        boot_aucs = np.array(boot_aucs)
-        if len(boot_aucs) > 10:
-            lower_ci = float(np.percentile(boot_aucs, 2.5))
-            upper_ci = float(np.percentile(boot_aucs, 97.5))
-            fpr_grid = np.linspace(0, 1, 200)
-            tpr_boot = np.zeros((len(boot_aucs), len(fpr_grid)))
-            for b in range(len(boot_aucs)):
-                idx = rng.integers(0, n, size=n)
-                yt = self.y_true[idx]
-                ys = self.y_score[idx]
-                if np.sum(yt == 1) == 0 or np.sum(yt == 0) == 0:
-                    continue
-                roc_b = ROC_Analysis(yt, ys)
-                roc_b._compute_curve()
-                tpr_boot[b, :] = np.interp(fpr_grid, roc_b._fpr, roc_b._tpr, left=0, right=1)
-            tpr_lower = np.percentile(tpr_boot, 2.5, axis=0)
-            tpr_upper = np.percentile(tpr_boot, 97.5, axis=0)
+
+        # Draw bootstrap CI band from cached results
+        if self._tpr_band is not None:
+            fpr_grid, tpr_lower, tpr_upper = self._tpr_band
             ax.fill_between(fpr_grid, tpr_lower, tpr_upper, alpha=0.15, color="#1f77b4",
-                            label=f"95% CI (bootstrap)")
+                            label="95% CI (bootstrap)")
+
+        lower_ci, upper_ci = self._boot_ci if self._boot_ci else (None, None)
         ax.plot(self._fpr, self._tpr, color="#00468B", linewidth=2, zorder=3,
                 label=f"ROC (AUC = {auc:.3f})")
         ax.plot([0, 1], [0, 1], "k--", linewidth=0.8, alpha=0.5, label="Chance")
@@ -280,7 +320,10 @@ class ROC_Analysis:
         ax.set_xlim(-0.02, 1.02)
         ax.set_ylim(-0.02, 1.02)
         ax.grid(True, linestyle=":", alpha=0.4)
-        auc_text = f"AUC = {auc:.3f}" + (f" (95% CI: {lower_ci:.3f}-{upper_ci:.3f})" if len(boot_aucs) > 10 else "")
+        auc_text = f"AUC = {auc:.3f}" + (
+            f" (95% CI: {lower_ci:.3f}-{upper_ci:.3f})"
+            if lower_ci is not None and upper_ci is not None else ""
+        )
         ax.text(0.02, 0.02, f"n = {self._n} (pos = {self._n_pos}, neg = {self._n_neg})\n{auc_text}",
                 transform=ax.transAxes, fontsize=8, va="bottom",
                 bbox=dict(facecolor="white", alpha=0.8, edgecolor="lightgray", boxstyle="round,pad=0.3"))

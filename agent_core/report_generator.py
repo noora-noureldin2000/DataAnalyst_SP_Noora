@@ -192,7 +192,8 @@ class ReportGenerator:
             lines.append(f"| 95% CI | [{self.effect_size_ci[0]:.{decimals}f}, {self.effect_size_ci[1]:.{decimals}f}] |")
         for k, v in r.items():
             if k not in ("test", "test_name", "statistic", "p_value", "effect_size", "effect_size_ci", "variables", "params", "pairwise_comparisons") and isinstance(v, (int, float)):
-                lines.append(f"| {k} | {v:.{decimals}f}" if isinstance(v, float) else f"| {k} | {v} |")
+                # Both branches must have the trailing pipe for valid Markdown table syntax
+                lines.append(f"| {k} | {v:.{decimals}f} |" if isinstance(v, float) else f"| {k} | {v} |")
         return "\n".join(lines)
 
     def figure(self, figsize=(8, 6)) -> Optional[plt.Figure]:

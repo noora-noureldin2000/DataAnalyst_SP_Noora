@@ -68,8 +68,10 @@ class MICEImputer:
                         imp_df.loc[~obs_mask, col] = preds
                     except Exception:
                         if col in df.columns:
+                            # pandas sample() requires int or np.random.RandomState, not Generator
+                            seed = int(rng.integers(0, 2**31))
                             imp_df.loc[~obs_mask, col] = df[col].dropna().sample(
-                                n=(~obs_mask).sum(), replace=True, random_state=rng
+                                n=(~obs_mask).sum(), replace=True, random_state=seed
                             ).values if (~obs_mask).sum() > 0 else None
             if iteration == self.max_iter - 1:
                 self.imp_dfs = [d.copy() for d in datasets]
@@ -190,7 +192,9 @@ class DataCleaner:
                 'mean_before': float(before_mean) if not np.isnan(before_mean) else None,
                 'mean_after': float(after_mean),
             }
-            self._log(f"Imputed {n_miss} missing values in '{col}' with {strategy}={val:.2f}")
+            # Safely format val for log — mode may return a string
+            val_repr = f'{val:.2f}' if isinstance(val, (int, float)) else str(val)
+            self._log(f"Imputed {n_miss} missing values in '{col}' with {strategy}={val_repr}")
         return self
 
     def cap_outliers(self, multiplier: float = 1.5):
@@ -290,8 +294,10 @@ class DataCleaner:
             for col in self.df.columns:
                 if kw in col.lower():
                     return col
+        # Cache variable types once to avoid O(n²) recomputation
+        var_types = self.detect_variable_types()
         for col in self.df.columns:
-            if self.detect_variable_types().get(col) == 'binary':
+            if var_types.get(col) == 'binary':
                 return col
         return self.df.columns[0]
 

@@ -1,4 +1,5 @@
 import os
+import tempfile
 from typing import Optional, Dict, List, Any
 from docx import Document
 from docx.shared import Inches, Pt, Cm, RGBColor, Emu
@@ -56,7 +57,8 @@ class APAWordExporter:
         self.doc.add_paragraph('')
         p = self.doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = p.add_run("Statistical Analysis Report")
+        # Use the provided title as subtitle too, not a hardcoded string
+        run = p.add_run(title)
         run.font.size = Pt(16)
         run.font.name = 'Times New Roman'
 
@@ -116,10 +118,17 @@ class APAWordExporter:
         return table
 
     def add_figure(self, fig: plt.Figure, caption: str = "", width: float = 5.5):
-        img_path = os.path.join(os.path.dirname(__file__) or '.', '_temp_fig.png')
-        fig.savefig(img_path, dpi=300, bbox_inches='tight', facecolor='white')
-        self.doc.add_picture(img_path, width=Inches(width))
-        os.remove(img_path)
+        # Use a unique temp file per figure to avoid collisions on multi-figure reports
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+            img_path = tmp.name
+        try:
+            fig.savefig(img_path, dpi=300, bbox_inches='tight', facecolor='white')
+            self.doc.add_picture(img_path, width=Inches(width))
+        finally:
+            try:
+                os.remove(img_path)
+            except OSError:
+                pass
 
         if caption:
             p = self.doc.add_paragraph()

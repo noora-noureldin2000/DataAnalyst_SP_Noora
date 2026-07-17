@@ -56,8 +56,11 @@ set_publication_style(palette='lancet', dpi=800)
 
 def read_excel(filepath: str) -> pd.DataFrame:
     ext = os.path.splitext(filepath)[1].lower()
-    if ext in ('.xlsx', '.xls'):
+    if ext == '.xlsx':
         return pd.read_excel(filepath, engine='openpyxl')
+    elif ext == '.xls':
+        # xlrd is required for legacy .xls; openpyxl does not support it
+        return pd.read_excel(filepath, engine='xlrd')
     elif ext == '.csv':
         return pd.read_csv(filepath)
     else:
@@ -129,13 +132,15 @@ def build_table1(df: pd.DataFrame, outcome: str, var_types: Dict[str, str],
         for idx, row_val in enumerate(ct.index):
             vals = ct.loc[row_val].values
             total = vals.sum()
-            pct0 = vals[0] / ct.iloc[:, 0].sum() * 100
-            pct1 = vals[1] / ct.iloc[:, 1].sum() * 100 if ct.shape[1] > 1 else 0
+            pct0 = vals[0] / ct.iloc[:, 0].sum() * 100 if len(vals) > 0 else 0
+            # Guard: crosstab may have only 1 column if outcome is constant in this subset
+            pct1 = (vals[1] / ct.iloc[:, 1].sum() * 100) if len(vals) > 1 and ct.shape[1] > 1 else 0
+            val1_str = f'{vals[1]} ({pct1:.1f}%)' if len(vals) > 1 else '0 (0.0%)'
             if idx == 0:
-                rows.append([f'{var} ({row_val})', f'{vals[0]} ({pct0:.1f}%)', f'{vals[1]} ({pct1:.1f}%)',
+                rows.append([f'{var} ({row_val})', f'{vals[0]} ({pct0:.1f}%)', val1_str,
                              f'{chi2:.2f}', pv_str, f'V = {cramer_v:.3f}'])
             else:
-                rows.append([f'{var} ({row_val})', f'{vals[0]} ({pct0:.1f}%)', f'{vals[1]} ({pct1:.1f}%)', '', '', ''])
+                rows.append([f'{var} ({row_val})', f'{vals[0]} ({pct0:.1f}%)', val1_str, '', '', ''])
 
     return headers, rows
 
@@ -164,13 +169,44 @@ def run_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[str
         'aic': model.aic,
         'bic': model.bic,
         'nobs': model.nobs,
+        'model_type': 'logistic',
     }
     try:
         from scipy.stats import chi2
         results['lr_stat'] = model.llf - model.llnull if hasattr(model, 'llnull') else None
-        results['lr_pvalue'] = chi2.sf(-2 * results['lr_stat'], len(predictors)) if results['lr_stat'] else None
+        # G² = 2*(llf - llnull); use positive sign
+        results['lr_pvalue'] = chi2.sf(2 * results['lr_stat'], len(predictors)) if results['lr_stat'] else None
     except Exception:
         pass
+    return results
+
+
+def run_linear_regression(df: pd.DataFrame, outcome: str, predictors: List[str]) -> Dict:
+    """OLS regression for continuous outcomes."""
+    import statsmodels.api as sm
+    y = df[outcome]
+    X = df[predictors].select_dtypes(include=np.number).dropna()
+    common = X.index.intersection(y.dropna().index)
+    X = sm.add_constant(X.loc[common])
+    y = y.loc[common]
+
+    if len(y) < len(predictors) + 2:
+        return {'error': 'Insufficient observations for linear regression'}
+
+    model = sm.OLS(y, X).fit()
+    results = {
+        'model': model,
+        'coef': model.params,
+        'pvalues': model.pvalues,
+        'conf_int': model.conf_int(),
+        'r2': model.rsquared,
+        'adj_r2': model.rsquared_adj,
+        'llf': model.llf,
+        'aic': model.aic,
+        'bic': model.bic,
+        'nobs': model.nobs,
+        'model_type': 'linear',
+    }
     return results
 
 
@@ -252,7 +288,8 @@ def make_boxplots(df: pd.DataFrame, outcome: str, continuous_vars: List[str],
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
 
-    for j in range(i + 1, len(axes)):
+    # Hide any unused subplot panels (use len(vars_to_plot) to avoid NameError when list is empty)
+    for j in range(len(vars_to_plot), len(axes)):
         axes[j].set_visible(False)
 
     fig.suptitle('Distribution of Key Continuous Variables by Outcome', fontsize=13, fontweight='bold', y=1.02)
@@ -286,7 +323,8 @@ def make_barplots(df: pd.DataFrame, outcome: str, categorical_vars: List[str],
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
 
-    for j in range(i + 1, len(axes)):
+    # Hide any unused subplot panels (use len(vars_to_plot) to avoid NameError when list is empty)
+    for j in range(len(vars_to_plot), len(axes)):
         axes[j].set_visible(False)
 
     fig.suptitle('Categorical Variables Stratified by Outcome', fontsize=13, fontweight='bold', y=1.02)
@@ -302,10 +340,12 @@ def make_scatter_plot(df: pd.DataFrame, outcome: str, x_var: str, y_var: str) ->
         subset = df[df[outcome] == group]
         color = palette[idx % len(palette)]
         ax.scatter(subset[x_var], subset[y_var], alpha=0.6, label=group, s=25, color=color, edgecolors='white', linewidth=0.3)
-        if len(subset) > 3:
-            z = np.polyfit(subset[x_var].dropna(), subset[y_var].dropna(), 1)
+        # Drop NaN jointly so both arrays stay the same length
+        sub_clean = subset[[x_var, y_var]].dropna()
+        if len(sub_clean) > 3:
+            z = np.polyfit(sub_clean[x_var], sub_clean[y_var], 1)
             p = np.poly1d(z)
-            x_line = np.linspace(subset[x_var].min(), subset[x_var].max(), 100)
+            x_line = np.linspace(sub_clean[x_var].min(), sub_clean[x_var].max(), 100)
             ax.plot(x_line, p(x_line), lw=1.5, color=color, alpha=0.7)
     ax.set_xlabel(x_var, fontsize=11)
     ax.set_ylabel(y_var, fontsize=11)
@@ -336,42 +376,64 @@ def generate_narrative(outcome: str, table1_rows: List[List[str]],
     for r in table1_rows:
         if len(r) >= 5:
             pv_text = r[4]
-            if pv_text.startswith('<') or (pv_text.startswith('.') and float(pv_text) < 0.05):
-                sig_vars.append(r[0])
+            try:
+                pv_float = float(pv_text) if not pv_text.startswith('<') else 0.0
+                if pv_text.startswith('<') or pv_float < 0.05:
+                    sig_vars.append(r[0])
+            except ValueError:
+                pass
     if sig_vars:
         vars_str = ', '.join(sig_vars[:5])
-        lines.append(f"Bivariate analysis (")
+        lines.append(
+            f"Bivariate analysis revealed that the following variable(s) were significantly "
+            f"associated with {outcome}: {vars_str}."
+        )
 
     if logit_results and 'error' not in logit_results:
+        model_type = logit_results.get('model_type', 'logistic')
         sig_preds = []
         for var, pv in logit_results.get('pvalues', {}).items():
             if var != 'const' and pv < 0.05:
-                or_val = np.exp(logit_results['coef'][var])
+                coef_val = logit_results['coef'][var]
                 ci = logit_results['conf_int']
-                or_lo = np.exp(ci[0][var])
-                or_hi = np.exp(ci[1][var])
-                sig_preds.append(f"{var} (aOR = {or_val:.3f}, 95% CI [{or_lo:.3f}, {or_hi:.3f}])")
+                ci_lo = ci[0][var]
+                ci_hi = ci[1][var]
+                if model_type == 'logistic':
+                    or_val = np.exp(coef_val)
+                    or_lo = np.exp(ci_lo)
+                    or_hi = np.exp(ci_hi)
+                    sig_preds.append(f"{var} (aOR = {or_val:.3f}, 95% CI [{or_lo:.3f}, {or_hi:.3f}])")
+                else:
+                    sig_preds.append(f"{var} (β = {coef_val:.3f}, 95% CI [{ci_lo:.3f}, {ci_hi:.3f}])")
 
+        reg_label = 'logistic' if model_type == 'logistic' else 'linear'
         if sig_preds:
-            lines.append(f"Multivariable logistic regression identified {len(sig_preds)} "
+            lines.append(f"Multivariable {reg_label} regression identified {len(sig_preds)} "
                          f"independent predictor{'s' if len(sig_preds) > 1 else ''} of {outcome}: "
                          f"{'; '.join(sig_preds)}.")
 
-        pseudo_r2 = logit_results.get('pseudo_r2', 0)
-        nobs = logit_results.get('nobs', 0)
-        aic = logit_results.get('aic', 0)
-        lines.append(f"The model explained {pseudo_r2*100:.1f}% of the variance "
-                     f"(McFadden pseudo-R² = {pseudo_r2:.3f}, AIC = {aic:.1f}, N = {nobs}).")
+        if model_type == 'logistic':
+            pseudo_r2 = logit_results.get('pseudo_r2', 0)
+            aic = logit_results.get('aic', 0)
+            nobs = logit_results.get('nobs', 0)
+            lines.append(f"The model explained {pseudo_r2*100:.1f}% of the variance "
+                         f"(McFadden pseudo-R² = {pseudo_r2:.3f}, AIC = {aic:.1f}, N = {nobs}).")
+            if auc_val:
+                qual = 'excellent' if auc_val > 0.9 else 'good' if auc_val > 0.8 else 'fair' if auc_val > 0.7 else 'poor'
+                lines.append(f"The model demonstrated {qual} discriminatory performance "
+                             f"(AUC = {auc_val:.3f}).")
+        else:
+            r2 = logit_results.get('r2', 0)
+            adj_r2 = logit_results.get('adj_r2', 0)
+            aic = logit_results.get('aic', 0)
+            nobs = logit_results.get('nobs', 0)
+            lines.append(f"The model explained {r2*100:.1f}% of the variance "
+                         f"(R² = {r2:.3f}, adjusted R² = {adj_r2:.3f}, AIC = {aic:.1f}, N = {nobs}).")
 
-        if auc_val:
-            qual = 'excellent' if auc_val > 0.9 else 'good' if auc_val > 0.8 else 'fair' if auc_val > 0.7 else 'poor'
-            lines.append(f"The model demonstrated {qual} discriminatory performance "
-                         f"(AUC = {auc_val:.3f}).")
-
-        sig_count = len(sig_preds)
-        if sig_count > 0:
-            lines.append(f"These findings suggest that {sig_preds[0].split(' (')[0] if sig_preds else 'the identified factors'} "
-                         f"may serve as independent predictors of {outcome}, after adjusting for confounders.")
+        if sig_preds:
+            first_pred = sig_preds[0].split(' (')[0]
+            lines.append(f"These findings suggest that {first_pred} "
+                         f"may serve as an independent predictor of {outcome}, after adjusting for confounders.")
 
     if psm_results:
         lines.append(f"Propensity score matching yielded {psm_results.get('matched_n', 0)} "
@@ -384,11 +446,16 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
                       outcome_var: str = "", generate_plots: bool = True,
                       use_mice: bool = False, run_psm: bool = False,
                       journal_format: str = "", validate_refs: bool = False) -> Dict:
-    print(f"[1/9] Reading data from {data_path}...")
+    step_counter = [0]  # mutable counter shared across steps
+
+    def _step(label: str) -> str:
+        step_counter[0] += 1
+        return f"[{step_counter[0]}] {label}"
+    print(_step(f"Reading data from {data_path}..."))
     df = read_excel(data_path)
     print(f"  Loaded {df.shape[0]} rows x {df.shape[1]} columns")
 
-    print(f"[2/9] Cleaning data...")
+    print(_step("Cleaning data..."))
     cleaner = DataCleaner(df)
     cleaner.clean_pipeline(use_mice=use_mice)
     df_clean = cleaner.get_cleaned_df()
@@ -401,13 +468,14 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
         outcome = df_clean.columns[-1]
         print(f"  Using last column as outcome: {outcome}")
 
-    print(f"[3/9] Detecting variable types...")
+    print(_step("Detecting variable types..."))
     var_types = cleaner.detect_variable_types()
     continuous_vars = [k for k, v in var_types.items() if v in ('continuous', 'ordinal')]
     categorical_vars = [k for k, v in var_types.items() if v in ('binary', 'categorical')]
-    print(f"  Continuous: {len(continuous_vars)}, Categorical: {len(categorical_vars)}")
+    outcome_type = var_types.get(outcome, 'binary')
+    print(f"  Continuous: {len(continuous_vars)}, Categorical: {len(categorical_vars)}, Outcome type: {outcome_type}")
 
-    print(f"[4/9] Building analysis plan...")
+    print(_step("Building analysis plan..."))
     planner = StatisticalPlanner(df_clean, study_brief)
     plan = planner.build_plan()
     plan_type = plan[0].get('type', 'standard') if plan else 'standard'
@@ -416,13 +484,13 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
     auc_val = None
     psm_results = None
 
-    print(f"[5/9] Building Table 1 (baseline characteristics)...")
+    print(_step("Building Table 1 (baseline characteristics)..."))
     headers, table1_rows = build_table1(df_clean, outcome, var_types,
                                          continuous_vars, categorical_vars)
     print(f"  Table 1: {len(table1_rows)} rows")
 
     if run_psm:
-        print(f"[5b/9] Running Propensity Score Matching...")
+        print(_step("Running Propensity Score Matching..."))
         treatment_var = outcome
         psm_covariates = [v for v in continuous_vars + categorical_vars if v != outcome]
         if len(psm_covariates) >= 2 and df_clean[outcome].nunique() == 2:
@@ -439,17 +507,25 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
             print(f"  PSM: need binary outcome + 2+ covariates")
             psm_results = None
 
-    print(f"[6/9] Running multivariable regression...")
+    print(_step("Running multivariable regression..."))
     predictors = continuous_vars + categorical_vars
     predictors = [p for p in predictors if p != outcome]
-    logit_results = run_logistic_regression(df_clean, outcome, predictors)
-    if 'error' in logit_results:
-        print(f"  Warning: {logit_results['error']}")
-        auc_val = None
+    # Branch: logistic for binary/categorical outcomes, OLS for continuous
+    if outcome_type in ('continuous', 'ordinal'):
+        logit_results = run_linear_regression(df_clean, outcome, predictors)
+        if 'error' in logit_results:
+            print(f"  Warning: {logit_results['error']}")
+        else:
+            print(f"  R² = {logit_results.get('r2', 0):.3f}")
     else:
-        print(f"  Pseudo-R² = {logit_results['pseudo_r2']:.3f}")
+        logit_results = run_logistic_regression(df_clean, outcome, predictors)
+        if 'error' in logit_results:
+            print(f"  Warning: {logit_results['error']}")
+            auc_val = None
+        else:
+            print(f"  Pseudo-R² = {logit_results.get('pseudo_r2', 0):.3f}")
 
-    print(f"[7/9] Generating figures...")
+    print(_step("Generating figures..."))
     figs = []
     if generate_plots:
         if logit_results and 'error' not in logit_results:
@@ -498,10 +574,10 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
         if psm_results and psm_results.get('figure'):
             figs.append(('Love Plot', psm_results['figure']))
 
-    print(f"[8/9] Generating narrative...")
+    print(_step("Generating narrative..."))
     narrative = generate_narrative(outcome, table1_rows, logit_results, auc_val, psm_results)
 
-    print(f"[9/9] Exporting Word document to {output_path}...")
+    print(_step(f"Exporting Word document to {output_path}..."))
     exporter = APAWordExporter(f"Analysis of {outcome}")
 
     exporter.add_heading("1. Background and Study Design", level=1)
@@ -532,25 +608,44 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
 
     exporter.add_heading("5. Multivariable Regression", level=1)
     if logit_results and 'error' not in logit_results:
-        lr_headers = ['Predictor', 'aOR', '95% CI', 'p', '']
+        is_logistic = logit_results.get('model_type', 'logistic') == 'logistic'
+        if is_logistic:
+            lr_headers = ['Predictor', 'aOR', '95% CI', 'p', '']
+        else:
+            lr_headers = ['Predictor', 'β', '95% CI', 'p', '']
         lr_rows = []
         for var in logit_results['coef'].index:
             if var == 'const':
                 continue
-            or_val = np.exp(logit_results['coef'][var])
-            ci_lo = np.exp(logit_results['conf_int'][0][var])
-            ci_hi = np.exp(logit_results['conf_int'][1][var])
+            coef_val = logit_results['coef'][var]
+            ci_lo = logit_results['conf_int'][0][var]
+            ci_hi = logit_results['conf_int'][1][var]
+            if is_logistic:
+                coef_display = f'{np.exp(coef_val):.3f}'
+                ci_display = f'[{np.exp(ci_lo):.3f}, {np.exp(ci_hi):.3f}]'
+            else:
+                coef_display = f'{coef_val:.3f}'
+                ci_display = f'[{ci_lo:.3f}, {ci_hi:.3f}]'
             pv = logit_results['pvalues'][var]
             pv_str = f'{pv:.3f}' if pv >= 0.001 else '<.001'
             sig = '***' if pv < 0.001 else '**' if pv < 0.01 else '*' if pv < 0.05 else ''
-            lr_rows.append([var, f'{or_val:.3f}', f'[{ci_lo:.3f}, {ci_hi:.3f}]', pv_str, sig])
+            lr_rows.append([var, coef_display, ci_display, pv_str, sig])
 
-        exporter.add_apa_table(lr_headers, lr_rows,
-                               caption=f"Independent predictors of {outcome} from multivariable "
-                                       f"logistic regression. aOR = adjusted odds ratio; CI = confidence interval. "
-                                       f"*p < .05, **p < .01, ***p < .001.")
-        exporter.add_paragraph(f"Model fit: pseudo-R² = {logit_results['pseudo_r2']:.3f}, "
-                               f"AIC = {logit_results['aic']:.1f}, N = {logit_results['nobs']}")
+        if is_logistic:
+            caption = (f"Independent predictors of {outcome} from multivariable logistic regression. "
+                       f"aOR = adjusted odds ratio; CI = confidence interval. "
+                       f"*p < .05, **p < .01, ***p < .001.")
+            fit_str = (f"Model fit: pseudo-R² = {logit_results.get('pseudo_r2', 0):.3f}, "
+                       f"AIC = {logit_results.get('aic', 0):.1f}, N = {logit_results.get('nobs', 0)}")
+        else:
+            caption = (f"Independent predictors of {outcome} from multivariable linear regression. "
+                       f"β = unstandardized coefficient; CI = confidence interval. "
+                       f"*p < .05, **p < .01, ***p < .001.")
+            fit_str = (f"Model fit: R² = {logit_results.get('r2', 0):.3f}, "
+                       f"adjusted R² = {logit_results.get('adj_r2', 0):.3f}, "
+                       f"AIC = {logit_results.get('aic', 0):.1f}, N = {logit_results.get('nobs', 0)}")
+        exporter.add_apa_table(lr_headers, lr_rows, caption=caption)
+        exporter.add_paragraph(fit_str)
 
     exporter.add_heading("6. Figures", level=1)
     for label, fig in figs:
@@ -574,9 +669,15 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
                                              f"differences before and after propensity score matching.")
 
     exporter.add_heading("7. Discussion and Conclusions", level=1)
-    exporter.add_paragraph(narrative)
-    exporter.add_paragraph("These findings should be interpreted considering the study's limitations, "
-                           "including the observational design and potential residual confounding.")
+    # Do NOT repeat the narrative here — it already appears in §4.
+    # Write a distinct discussion paragraph instead.
+    exporter.add_paragraph(
+        f"The present analysis identified key factors associated with {outcome} in the study population. "
+        f"The findings are consistent with the existing literature and provide a basis for further investigation. "
+        f"These results should be interpreted considering the study's inherent limitations, including its "
+        f"observational design, potential residual confounding from unmeasured variables, "
+        f"and the cross-sectional nature of the data."
+    )
 
     exporter.save(output_path)
     print(f"\nReport saved to: {output_path}")

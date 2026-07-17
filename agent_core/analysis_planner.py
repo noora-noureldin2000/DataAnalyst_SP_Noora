@@ -65,7 +65,8 @@ class StatisticalPlanner:
     def _detect_variable_type(self, col, series, dtype, nunique) -> str:
         if pd.api.types.is_integer_dtype(dtype) and nunique <= 2:
             return "binary"
-        if pd.api.types.is_object_dtype(dtype) or pd.api.types.is_categorical_dtype(dtype):
+        # is_categorical_dtype was removed in pandas 3.0; use isinstance instead
+        if pd.api.types.is_object_dtype(dtype) or isinstance(dtype, pd.CategoricalDtype):
             if nunique <= 2:
                 return "binary"
             return "nominal"
