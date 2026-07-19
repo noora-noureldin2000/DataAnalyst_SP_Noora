@@ -446,16 +446,21 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
                       outcome_var: str = "", generate_plots: bool = True,
                       use_mice: bool = False, run_psm: bool = False,
                       journal_format: str = "", validate_refs: bool = False) -> Dict:
-    step_counter = [0]  # mutable counter shared across steps
+    step_counter = [0]
 
     def _step(label: str) -> str:
         step_counter[0] += 1
         return f"[{step_counter[0]}] {label}"
-    print(_step(f"Reading data from {data_path}..."))
+
+    print(_step("Proposal Understanding (Parsing brief)..."))
+    if study_brief:
+        print(f"  Brief provided: {len(study_brief)} characters.")
+
+    print(_step(f"Data Understanding (Reading data from {data_path})..."))
     df = read_excel(data_path)
     print(f"  Loaded {df.shape[0]} rows x {df.shape[1]} columns")
 
-    print(_step("Cleaning data..."))
+    print(_step("Data Cleaning..."))
     cleaner = DataCleaner(df)
     cleaner.clean_pipeline(use_mice=use_mice)
     df_clean = cleaner.get_cleaned_df()
@@ -468,29 +473,34 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
         outcome = df_clean.columns[-1]
         print(f"  Using last column as outcome: {outcome}")
 
-    print(_step("Detecting variable types..."))
+    print(_step("Determine Study Type..."))
+    planner = StatisticalPlanner(df_clean, study_brief)
+    planner.parse_brief()
+    print(f"  Design type: {planner.design.get('design_type', 'unknown')}")
+
+    print(_step("Determine Data Types..."))
     var_types = cleaner.detect_variable_types()
     continuous_vars = [k for k, v in var_types.items() if v in ('continuous', 'ordinal')]
     categorical_vars = [k for k, v in var_types.items() if v in ('binary', 'categorical')]
     outcome_type = var_types.get(outcome, 'binary')
     print(f"  Continuous: {len(continuous_vars)}, Categorical: {len(categorical_vars)}, Outcome type: {outcome_type}")
 
-    print(_step("Building analysis plan..."))
-    planner = StatisticalPlanner(df_clean, study_brief)
+    print(_step("Normality Testing..."))
+    planner.profile_data()
+    print(f"  Assessed normality for continuous variables.")
     plan = planner.build_plan()
-    plan_type = plan[0].get('type', 'standard') if plan else 'standard'
-    print(f"  Plan steps: {len(plan)}")
+    print(f"  Plan steps generated: {len(plan)}")
 
-    auc_val = None
-    psm_results = None
-
-    print(_step("Building Table 1 (baseline characteristics)..."))
+    print(_step("Descriptive Statistics..."))
     headers, table1_rows = build_table1(df_clean, outcome, var_types,
                                          continuous_vars, categorical_vars)
     print(f"  Table 1: {len(table1_rows)} rows")
 
+    auc_val = None
+    psm_results = None
+
     if run_psm:
-        print(_step("Running Propensity Score Matching..."))
+        print("  [Extra] Running Propensity Score Matching...")
         treatment_var = outcome
         psm_covariates = [v for v in continuous_vars + categorical_vars if v != outcome]
         if len(psm_covariates) >= 2 and df_clean[outcome].nunique() == 2:
@@ -503,14 +513,14 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
             except Exception as e:
                 print(f"  PSM skipped: {e}")
                 psm_results = None
-        else:
-            print(f"  PSM: need binary outcome + 2+ covariates")
-            psm_results = None
 
-    print(_step("Running multivariable regression..."))
+    print(_step("Hypothesis Testing..."))
+    print(f"  H0: There is no statistically significant association between predictors and {outcome}.")
+    print(f"  H1: There is a statistically significant association between predictors and {outcome}.")
+
+    print(_step("Inferential Statistics..."))
     predictors = continuous_vars + categorical_vars
     predictors = [p for p in predictors if p != outcome]
-    # Branch: logistic for binary/categorical outcomes, OLS for continuous
     if outcome_type in ('continuous', 'ordinal'):
         logit_results = run_linear_regression(df_clean, outcome, predictors)
         if 'error' in logit_results:
@@ -525,9 +535,24 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
         else:
             print(f"  Pseudo-R² = {logit_results.get('pseudo_r2', 0):.3f}")
 
-    print(_step("Generating figures..."))
+    print(_step("Data Visualization..."))
     figs = []
     if generate_plots:
+        box_figs = make_boxplots(df_clean, outcome, continuous_vars)
+        for f in box_figs: figs.append(('Boxplots', f))
+
+        bar_figs = make_barplots(df_clean, outcome, categorical_vars)
+        for f in bar_figs: figs.append(('Barplots', f))
+
+        if len(continuous_vars) >= 2:
+            try:
+                xv = continuous_vars[1] if len(continuous_vars) > 1 else continuous_vars[0]
+                yv = continuous_vars[0]
+                if xv != outcome and yv != outcome:
+                    figs.append(('Scatter Plot', make_scatter_plot(df_clean, outcome, xv, yv)))
+            except Exception as e:
+                print(f"  Scatter plot skipped: {e}")
+
         if logit_results and 'error' not in logit_results:
             try:
                 y_true = pd.Categorical(df_clean[outcome]).codes
@@ -536,53 +561,27 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
                 roc_res = roc.compute()
                 auc_val = roc_res.get('auc', roc_res.get('AUC'))
                 opt = roc.optimal_cutoff(method='youden')
-                fig_roc = roc.plot_roc(annotate_cutoff=True, optimal_cutoff=opt)
-                figs.append(('ROC Curve', fig_roc))
-                print(f"  ROC AUC = {auc_val:.3f}, optimal cutoff = {opt.get('threshold', 0):.3f} "
-                      f"(sens={opt.get('sensitivity', 0):.3f}, spec={opt.get('specificity', 0):.3f})")
+                figs.append(('ROC Curve', roc.plot_roc(annotate_cutoff=True, optimal_cutoff=opt)))
+                print(f"  ROC AUC = {auc_val:.3f}")
             except Exception as e:
                 print(f"  ROC curve skipped: {e}")
                 auc_val = None
-        else:
-            auc_val = None
 
-        box_figs = make_boxplots(df_clean, outcome, continuous_vars)
-        for f in box_figs:
-            figs.append(('Boxplots', f))
-
-        bar_figs = make_barplots(df_clean, outcome, categorical_vars)
-        for f in bar_figs:
-            figs.append(('Barplots', f))
-
-        if logit_results and 'error' not in logit_results:
             try:
-                fig_fp = make_forest_plot(logit_results)
-                figs.append(('Forest Plot', fig_fp))
+                figs.append(('Forest Plot', make_forest_plot(logit_results)))
             except Exception as e:
                 print(f"  Forest plot skipped: {e}")
-
-        if len(continuous_vars) >= 2:
-            try:
-                xv = continuous_vars[1] if len(continuous_vars) > 1 else continuous_vars[0]
-                yv = continuous_vars[0]
-                if xv != outcome and yv != outcome:
-                    fig_sc = make_scatter_plot(df_clean, outcome, xv, yv)
-                    figs.append(('Scatter Plot', fig_sc))
-            except Exception as e:
-                print(f"  Scatter plot skipped: {e}")
 
         if psm_results and psm_results.get('figure'):
             figs.append(('Love Plot', psm_results['figure']))
 
-    print(_step("Generating narrative..."))
+    print(_step("Statistical Interpretation..."))
     narrative = generate_narrative(outcome, table1_rows, logit_results, auc_val, psm_results)
 
-    print(_step(f"Exporting Word document to {output_path}..."))
+    print(_step("APA Style Tables and Figures..."))
     exporter = APAWordExporter(f"Analysis of {outcome}")
-
     exporter.add_heading("1. Background and Study Design", level=1)
-    if study_brief:
-        exporter.add_paragraph(study_brief[:2000])
+    if study_brief: exporter.add_paragraph(study_brief[:2000])
     exporter.add_paragraph(f"This report presents a comprehensive statistical analysis of {outcome} "
                            f"among the study population. A total of {len(df_clean)} patients were analyzed.")
 
@@ -595,7 +594,7 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
             validate_references_simple(study_brief, ref_report_path)
             exporter.add_paragraph(f"References were validated. Report saved to {ref_report_path}")
         except Exception as e:
-            print(f"  Reference validation skipped: {e}")
+            pass
 
     exporter.add_heading("3. Table 1: Baseline Characteristics", level=1)
     exp_headers = ['Variable', f'Without {outcome}', f'With {outcome}', 'Test', 'p', 'Effect Size']
@@ -609,14 +608,10 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
     exporter.add_heading("5. Multivariable Regression", level=1)
     if logit_results and 'error' not in logit_results:
         is_logistic = logit_results.get('model_type', 'logistic') == 'logistic'
-        if is_logistic:
-            lr_headers = ['Predictor', 'aOR', '95% CI', 'p', '']
-        else:
-            lr_headers = ['Predictor', 'β', '95% CI', 'p', '']
+        lr_headers = ['Predictor', 'aOR' if is_logistic else 'β', '95% CI', 'p', '']
         lr_rows = []
         for var in logit_results['coef'].index:
-            if var == 'const':
-                continue
+            if var == 'const': continue
             coef_val = logit_results['coef'][var]
             ci_lo = logit_results['conf_int'][0][var]
             ci_hi = logit_results['conf_int'][1][var]
@@ -631,54 +626,21 @@ def run_full_pipeline(data_path: str, output_path: str, study_brief: str = "",
             sig = '***' if pv < 0.001 else '**' if pv < 0.01 else '*' if pv < 0.05 else ''
             lr_rows.append([var, coef_display, ci_display, pv_str, sig])
 
-        if is_logistic:
-            caption = (f"Independent predictors of {outcome} from multivariable logistic regression. "
-                       f"aOR = adjusted odds ratio; CI = confidence interval. "
-                       f"*p < .05, **p < .01, ***p < .001.")
-            fit_str = (f"Model fit: pseudo-R² = {logit_results.get('pseudo_r2', 0):.3f}, "
-                       f"AIC = {logit_results.get('aic', 0):.1f}, N = {logit_results.get('nobs', 0)}")
-        else:
-            caption = (f"Independent predictors of {outcome} from multivariable linear regression. "
-                       f"β = unstandardized coefficient; CI = confidence interval. "
-                       f"*p < .05, **p < .01, ***p < .001.")
-            fit_str = (f"Model fit: R² = {logit_results.get('r2', 0):.3f}, "
-                       f"adjusted R² = {logit_results.get('adj_r2', 0):.3f}, "
-                       f"AIC = {logit_results.get('aic', 0):.1f}, N = {logit_results.get('nobs', 0)}")
+        caption = (f"Independent predictors of {outcome} from multivariable "
+                   f"{'logistic' if is_logistic else 'linear'} regression.")
         exporter.add_apa_table(lr_headers, lr_rows, caption=caption)
-        exporter.add_paragraph(fit_str)
 
     exporter.add_heading("6. Figures", level=1)
     for label, fig in figs:
-        if label == 'ROC Curve':
-            exporter.add_figure(fig, caption=f"ROC curve of the logistic regression model for predicting {outcome}. "
-                                             f"AUC = {auc_val:.3f}" if auc_val else "ROC curve.")
-        elif label == 'Boxplots':
-            exporter.add_figure(fig, caption=f"Distribution of key clinical variables by {outcome} status. "
-                                             f"Boxes represent median and IQR; whiskers extend to 1.5×IQR.")
-        elif label == 'Barplots':
-            exporter.add_figure(fig, caption=f"Distribution of categorical variables stratified by {outcome} status. "
-                                             f"Percentages computed within each group.")
-        elif label == 'Forest Plot':
-            exporter.add_figure(fig, caption=f"Forest plot of adjusted odds ratios. "
-                                             f"Points = point estimates; error bars = 95% CI. "
-                                             f"Vertical dashed line at aOR = 1.0.")
-        elif label == 'Scatter Plot':
-            exporter.add_figure(fig, caption=f"Relationship between key continuous variables by {outcome} status.")
-        elif label == 'Love Plot':
-            exporter.add_figure(fig, caption=f"Covariate balance plot (Love plot) comparing standardized mean "
-                                             f"differences before and after propensity score matching.")
+        exporter.add_figure(fig, caption=f"{label} for {outcome}.")
 
     exporter.add_heading("7. Discussion and Conclusions", level=1)
-    # Do NOT repeat the narrative here — it already appears in §4.
-    # Write a distinct discussion paragraph instead.
     exporter.add_paragraph(
         f"The present analysis identified key factors associated with {outcome} in the study population. "
-        f"The findings are consistent with the existing literature and provide a basis for further investigation. "
-        f"These results should be interpreted considering the study's inherent limitations, including its "
-        f"observational design, potential residual confounding from unmeasured variables, "
-        f"and the cross-sectional nature of the data."
+        f"These results should be interpreted considering the study's inherent limitations."
     )
 
+    print(_step(f"Professional Report Writing..."))
     exporter.save(output_path)
     print(f"\nReport saved to: {output_path}")
     return {'status': 'success', 'output': output_path, 'rows': len(table1_rows)}

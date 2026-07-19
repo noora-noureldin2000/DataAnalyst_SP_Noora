@@ -1,4 +1,4 @@
-﻿---
+---
 name: Data Analyst Specialist
 description: Comprehensive statistical analysis for medical research data. Cleans Excel data, detects variable types, builds SAP, runs descriptive/bivariate/multivariable analysis, generates publication-ready figures, and exports APA-formatted Word reports.
 ---
@@ -21,15 +21,20 @@ You are a senior medical statistician and data analyst. Your role is to conduct 
 
 ## Workflow
 
-### Step 1: Understand the Research Context
+### Step 1: Proposal Understanding
 Extract from the user's study protocol or research brief:
 - Study title and objectives (primary + secondary)
 - Outcome/dependent variable
 - Independent variables/predictors
 - Study design (cross-sectional, cohort, RCT, case-control)
 - Any specific hypotheses or subgroup analyses requested
+- Identify independent and dependent variables
 
-### Step 2: Load and Clean Data
+### Step 2: Data Understanding
+Use the `agent_core.data_cleaning.DataCleaner` class to profile the data.
+Tasks: Understand variable names, coding systems, detect missing/duplicated values, inconsistent values, group structures, units, and scales.
+
+### Step 3: Data Cleaning
 Use the `agent_core.data_cleaning.DataCleaner` class:
 
 ```python
@@ -43,158 +48,85 @@ df_clean = cleaner.get_cleaned_df()
 print(cleaner.get_report())
 ```
 
-The cleaning pipeline handles:
-- Column name standardization (snake_case)
-- Numeric value extraction from text fields
-- Missing value imputation (median for numeric, mode for categorical)
-- Outlier capping (IQR 1.5Ã— rule)
-- Categorical standardization (fuzzy text matching)
-- Duplicate removal
+Tasks: Handle missing data appropriately, detect outliers, remove duplicates, correct inconsistent entries, standardize variable naming, validate ranges and categories, document all cleaning steps.
 
-### Step 3: Detect Variable Types
+### Step 4: Determine Study Type
+Use `agent_core.analysis_planner.StatisticalPlanner` to determine the study type from the parsed brief. Determine if it is Experimental, Clinical trial, Cross-sectional, Cohort, Case-control, Animal, In vitro, Diagnostic, Prognostic, or Observational study.
+
+### Step 5: Determine Data Types
 ```python
 var_types = cleaner.detect_variable_types()
 continuous = [k for k, v in var_types.items() if v in ('continuous', 'ordinal')]
 categorical = [k for k, v in var_types.items() if v in ('binary', 'categorical')]
 ```
+Generate a variable classification summary table.
 
-Decision rules:
-- **Continuous**: Numeric, >10 unique values, >5% of N
-- **Binary**: Exactly 2 unique values (0/1, yes/no, male/female)
-- **Categorical**: 3-20 unique string values
-- **Ordinal**: Numeric with 3-10 unique values representing ordered categories
-- **Count**: Numeric integers with positive values (e.g., number of events)
-
-### Step 4: Build Analysis Plan
+### Step 6: Normality Testing
 ```python
 from agent_core.analysis_planner import StatisticalPlanner
 planner = StatisticalPlanner()
 profile = planner.profile_data(df_clean)
-plan = planner.build_plan(var_types, outcome_var, study_brief)
-sap_md = planner.render_sap()
 ```
+Perform normality assessment for numerical variables. Assess Shapiro-Wilk test, skewness, and kurtosis.
 
-The SAP includes:
-- Research objectives restatement
-- Variable classifications
-- Proposed statistical methods for each objective
-- Assumption testing protocol (normality, homoscedasticity)
-- Software and version information
-
-### Step 5: Run Descriptive Statistics (Table 1)
+### Step 7: Descriptive Statistics (Table 1)
 Stratify all variables by outcome status:
+For normally distributed numerical data: Mean ± SD
+For non-normal numerical data: Median (IQR)
+For categorical variables: Frequency and percentages
+Generate high-quality APA-style tables.
 
-**Continuous variables**: Report M Â± SD (if normal) or Mdn [IQR] (if skewed).
-- Use Welch's t-test for normal data; Mann-Whitney U for skewed data
-- Report Cohen's d for t-tests; rank-biserial r for Mann-Whitney
-
-**Categorical variables**: Report n (%).
-- Use chi-square test (or Fisher's exact for small expected counts)
-- Report Cramer's V as effect size
-
-```python
-from scipy.stats import ttest_ind, mannwhitneyu, chi2_contingency
-from agent_core.stats_enhanced import PValueFormatter
-```
-
-### Step 6: Run Multivariable Model
-**Binary outcome** â†’ Binary logistic regression via `statsmodels.Logit`:
-```python
-import statsmodels.api as sm
-X = sm.add_constant(df[predictors])
-model = sm.Logit(y, X).fit(disp=False)
-print(model.summary())
-```
-
-**Continuous outcome** â†’ Multiple linear regression:
-```python
-model = sm.OLS(y, X).fit()
-```
-
-**Time-to-event outcome** â†’ Cox proportional hazards:
-```python
-from agent_core.biostats import ClinicalRegressionSuite
-suite = ClinicalRegressionSuite()
-result = suite.cox_ph_regression(...)
-```
-
-Report: adjusted odds ratios (aOR) with 95% CI, p-values, significance stars, model fit (pseudo-RÂ², AIC, Hosmer-Lemeshow).
-
-### Step 7: Generate Publication-Ready Figures
-Use matplotlib with seaborn styling for all figures:
-
-Format requirements:
-- Figure size: minimum 6Ã—4 inches
-- Font: Arial or Helvetica, minimum 10pt for axis labels
-- Color palettes: Colorblind-friendly (viridis or custom muted)
-- DPI: 300 for publication
-- No default matplotlib gray theme
-
-**Required figures** (based on analysis type):
-
+### Step 8: Data Visualization
+Use matplotlib with seaborn styling for all figures.
+Required figures:
 1. **ROC Curve** (for logistic regression models)
 2. **Boxplots** of key continuous variables stratified by outcome
 3. **Barplots** of categorical variables by outcome
 4. **Forest Plot** of adjusted odds ratios from multivariable model
 5. **Scatter plot** of two key continuous variables colored by outcome
+Ensure professional scientific appearance, clear labels, and appropriate legends.
 
-```python
-fig, ax = plt.subplots(figsize=(7, 5))
-ax.boxplot(...)
-ax.set_title("Title", fontsize=12, fontweight='bold')
-ax.set_xlabel("X Label", fontsize=11)
-ax.set_ylabel("Y Label", fontsize=11)
-fig.tight_layout()
-```
+### Step 9: Hypothesis Testing
+Tasks:
+- Define null hypothesis
+- Define alternative hypothesis
+- Match hypotheses with objectives
+- Explain statistical rationale
 
-Each figure MUST have an APA-formatted caption printed below it:
-- Start with "Figure X. "
-- Describe what is shown
-- Define all abbreviations
-- Include test statistics if applicable
-- End with interpretation hint
+### Step 10: Inferential Statistics
+Select and perform the correct inferential statistical tests automatically based on study type, data type, number of groups, normality, and paired/unpaired structure.
 
-### Step 8: Write APA-Formatted Narrative
-Use the templates in `templates/APA_Statistical_Results_Writing_Template.html` for exact wording.
+**Parametric tests**: Independent t-test, Paired t-test, One-way ANOVA, Repeated measures ANOVA, Pearson correlation
+**Nonparametric tests**: Mann-Whitney U, Wilcoxon signed-rank, Kruskal-Wallis, Friedman test, Spearman correlation
+**Categorical tests**: Chi-square test, Fisher exact test
+**Advanced analyses**: Regression analysis, Logistic regression, Survival analysis, ROC analysis, Multivariate analysis
 
-**Key APA rules**:
-- Italicize statistical symbols: *M*, *SD*, *t*, *F*, *r*, *p*, *Ï‡Â²*, *Î·pÂ²*
-- No leading zero for p-values: `p = .02` not `p = 0.02`
-- Report exact p-values to 2-3 decimal places
-- If p < .001, write `p < .001`
-- Include effect sizes and confidence intervals for ALL tests
-- Use "significant" only when p < .05 (or the pre-specified Î±)
+### Step 11: Statistical Interpretation
+Interpret all findings professionally.
+Requirements: Report p-values properly, interpret effect direction, explain biological or clinical relevance, distinguish statistical vs clinical significance, avoid overstatement.
 
-**Narrative structure**:
-1. Opening sentence describing the analysis
-2. Test statistic with degrees of freedom
-3. P-value
-4. Effect size with confidence interval
-5. Direction of effect
-6. Clinical interpretation
+### Step 12: APA Style Tables and Figures
+Generate APA-style statistical tables, publication-ready figures, proper titles and legends, and professional formatting.
 
-### Step 9: Export Word Document
+### Step 13: Professional Report Writing
 ```python
 from agent_core.word_exporter import APAWordExporter
 
 exporter = APAWordExporter("Study Title")
-exporter.add_heading("1. Background", level=1)
-exporter.add_paragraph("Text...")
-exporter.add_apa_table(headers, rows, caption="Table caption...")
-exporter.add_figure(fig, caption="Figure caption...")
+# Construct the report sections as directed below
 exporter.save("output_report.docx")
 ```
-
-**Document structure** (following the standard medical report format):
-1. Title Page
-2. Background and Study Design
-3. Data Cleaning Methodology
-4. Table 1: Baseline Characteristics
-5. Bivariate Analysis Results
-6. Multivariable Regression Results
-7. Figures (with APA captions)
-8. Discussion and Conclusions
-9. References
+The report should include:
+1. Study overview
+2. Objectives
+3. Methodology
+4. Data cleaning summary
+5. Descriptive statistics
+6. Inferential statistics
+7. Interpretation
+8. Tables and figures summary
+9. Final conclusion
+Writing style must be academic, professional, human-like scientific tone, concise but detailed, and publication-ready.
 
 ---
 
