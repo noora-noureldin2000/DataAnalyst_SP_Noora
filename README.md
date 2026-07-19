@@ -1,4 +1,4 @@
-# Mega Medical Writer v2.0
+# Mega Medical Writer v2.1
 
 A comprehensive, zero-hallucination statistical analysis toolkit for medical research data, designed for opencode AI agents. Performs end-to-end analysis from raw Excel datasets to publication-ready APA 7th edition Word documents.
 
@@ -8,18 +8,18 @@ A comprehensive, zero-hallucination statistical analysis toolkit for medical res
 # Install dependencies
 pip install -r requirements.txt
 
-# Run full 6-phase analysis pipeline
+# Run full 13-step analysis pipeline
 python run_analysis.py --data data.xlsx --output report.docx --brief "study protocol"
 ```
 
-## Features (v2.0 Updates)
+## Features (v2.1 Updates: The 13-Step Professional Workflow)
 
-- **Phase 0 (Context Ingestion & Variables)**: Auto-maps variables to formal statistical roles. Parses study briefs and handles psychometric scoring (PHQ-9, GAD-7, SF-36).
-- **Phase 1 (Core Statistical Tests)**: Extensive coverage including Paired t-tests, Wilcoxon, Friedman, multi-way ANOVA, McNemar's, Cochran Q, and robust 2x2 contingency tables.
-- **Phase 2 (Epidemiology)**: Point/period prevalence, incidence proportions/rates, and rate standardizations.
-- **Phase 3 (Statistical Infrastructure)**: Strict assumption checking (Levene, Breusch-Pagan, Durbin-Watson) and extensive effect sizes (Cohen's d/f, Rank-Biserial r). On-request multiple comparisons (Bonferroni, FDR-BH, Holm).
-- **Phase 4 (Workflows & Visualizations)**: Cross-sectional, Case-Control, Cohort, and RCT routing. Lancet-standard ggplot2-style figures including forest plots, box-jitter plots, KM curves, and prevalence charts.
-- **Phase 5 & 6 (Verification Log)**: Strict zero-hallucination guardrails via `verification.py`, cross-checking all narrative claims and p-values against computed data tables before Word document generation.
+- **Steps 1-3 (Understanding & Cleaning)**: Context ingestion, rigorous variable profiling, and automated data cleaning via `DataCleaner`.
+- **Steps 4-5 (Study Design & Variable Types)**: Automated study type determination and variable classification.
+- **Steps 6-7 (Normality & Descriptive Statistics)**: Shapiro-Wilk/kurtosis checks generating a beautifully stratified baseline Table 1.
+- **Step 8 (Data Visualization)**: Publication-ready ROC curves, Forest plots, and Boxplots matching Lancet-standard guidelines.
+- **Steps 9-10 (Hypothesis Testing & Inferential Statistics)**: Bivariate and multivariable linear/logistic/Cox regression suites strictly routing tests based on variable types.
+- **Steps 11-13 (Interpretation, Tables, Report Writing)**: Zero-hallucination APA 7th edition Word document generation featuring strictly mapped p-values, aORs, and effect sizes.
 
 ## Project Structure
 
