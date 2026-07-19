@@ -1,3 +1,7 @@
+﻿---
+name: Data Analyst Specialist
+description: Comprehensive statistical analysis for medical research data. Cleans Excel data, detects variable types, builds SAP, runs descriptive/bivariate/multivariable analysis, generates publication-ready figures, and exports APA-formatted Word reports.
+---
 # Data Analyst Specialist for Medical Research
 
 ## Role Definition
@@ -43,7 +47,7 @@ The cleaning pipeline handles:
 - Column name standardization (snake_case)
 - Numeric value extraction from text fields
 - Missing value imputation (median for numeric, mode for categorical)
-- Outlier capping (IQR 1.5× rule)
+- Outlier capping (IQR 1.5Ã— rule)
 - Categorical standardization (fuzzy text matching)
 - Duplicate removal
 
@@ -80,7 +84,7 @@ The SAP includes:
 ### Step 5: Run Descriptive Statistics (Table 1)
 Stratify all variables by outcome status:
 
-**Continuous variables**: Report M ± SD (if normal) or Mdn [IQR] (if skewed).
+**Continuous variables**: Report M Â± SD (if normal) or Mdn [IQR] (if skewed).
 - Use Welch's t-test for normal data; Mann-Whitney U for skewed data
 - Report Cohen's d for t-tests; rank-biserial r for Mann-Whitney
 
@@ -94,7 +98,7 @@ from agent_core.stats_enhanced import PValueFormatter
 ```
 
 ### Step 6: Run Multivariable Model
-**Binary outcome** → Binary logistic regression via `statsmodels.Logit`:
+**Binary outcome** â†’ Binary logistic regression via `statsmodels.Logit`:
 ```python
 import statsmodels.api as sm
 X = sm.add_constant(df[predictors])
@@ -102,25 +106,25 @@ model = sm.Logit(y, X).fit(disp=False)
 print(model.summary())
 ```
 
-**Continuous outcome** → Multiple linear regression:
+**Continuous outcome** â†’ Multiple linear regression:
 ```python
 model = sm.OLS(y, X).fit()
 ```
 
-**Time-to-event outcome** → Cox proportional hazards:
+**Time-to-event outcome** â†’ Cox proportional hazards:
 ```python
 from agent_core.biostats import ClinicalRegressionSuite
 suite = ClinicalRegressionSuite()
 result = suite.cox_ph_regression(...)
 ```
 
-Report: adjusted odds ratios (aOR) with 95% CI, p-values, significance stars, model fit (pseudo-R², AIC, Hosmer-Lemeshow).
+Report: adjusted odds ratios (aOR) with 95% CI, p-values, significance stars, model fit (pseudo-RÂ², AIC, Hosmer-Lemeshow).
 
 ### Step 7: Generate Publication-Ready Figures
 Use matplotlib with seaborn styling for all figures:
 
 Format requirements:
-- Figure size: minimum 6×4 inches
+- Figure size: minimum 6Ã—4 inches
 - Font: Arial or Helvetica, minimum 10pt for axis labels
 - Color palettes: Colorblind-friendly (viridis or custom muted)
 - DPI: 300 for publication
@@ -154,12 +158,12 @@ Each figure MUST have an APA-formatted caption printed below it:
 Use the templates in `templates/APA_Statistical_Results_Writing_Template.html` for exact wording.
 
 **Key APA rules**:
-- Italicize statistical symbols: *M*, *SD*, *t*, *F*, *r*, *p*, *χ²*, *ηp²*
+- Italicize statistical symbols: *M*, *SD*, *t*, *F*, *r*, *p*, *Ï‡Â²*, *Î·pÂ²*
 - No leading zero for p-values: `p = .02` not `p = 0.02`
 - Report exact p-values to 2-3 decimal places
 - If p < .001, write `p < .001`
 - Include effect sizes and confidence intervals for ALL tests
-- Use "significant" only when p < .05 (or the pre-specified α)
+- Use "significant" only when p < .05 (or the pre-specified Î±)
 
 **Narrative structure**:
 1. Opening sentence describing the analysis
@@ -204,10 +208,10 @@ exporter.save("output_report.docx")
 | Continuous (paired) | Binary (paired) | Paired t-test | Wilcoxon Signed-Rank |
 | Continuous (3+ groups) | Categorical | One-way ANOVA | Kruskal-Wallis |
 | Continuous (repeated) | Categorical (paired) | Repeated Measures ANOVA | Friedman Test |
-| Binary | Binary | Chi-square / Fisher's exact | — |
-| Binary | Continuous | Logistic regression | — |
+| Binary | Binary | Chi-square / Fisher's exact | â€” |
+| Binary | Continuous | Logistic regression | â€” |
 | Continuous | Continuous | Pearson correlation | Spearman correlation |
-| Continuous | Multiple | Multiple linear regression | — |
+| Continuous | Multiple | Multiple linear regression | â€” |
 | Time-to-event | Any | Cox proportional hazards | Log-rank test |
 
 ### For multivariable modeling:
@@ -228,9 +232,9 @@ exporter.save("output_report.docx")
 |---|---|---|
 | t-test | Cohen's d | 0.2=small, 0.5=medium, 0.8=large |
 | Mann-Whitney U | Rank-biserial r | 0.1=small, 0.3=medium, 0.5=large |
-| ANOVA | ηp² (partial eta squared) | 0.01=small, 0.06=medium, 0.14=large |
+| ANOVA | Î·pÂ² (partial eta squared) | 0.01=small, 0.06=medium, 0.14=large |
 | Chi-square | Cramer's V | varies by df; 0.1=small, 0.3=medium |
-| Correlation | Pearson's r / Spearman's ρ | 0.1=small, 0.3=medium, 0.5=large |
+| Correlation | Pearson's r / Spearman's Ï | 0.1=small, 0.3=medium, 0.5=large |
 | Logistic regression | Odds ratio | OR=1 no effect; OR>1 increased odds |
 | Cox regression | Hazard ratio | HR=1 no effect; HR>1 increased hazard |
 
@@ -272,34 +276,34 @@ Use these sentence templates for standard APA-formatted results:
 > A Wilcoxon signed-rank test showed that [intervention] elicited [no] a statistically significant change in [DV] (*Z* = [Z], *p* = [p], rank-biserial *r* = [r]).
 
 **One-way ANOVA**:
-> A one-way ANOVA revealed [no] a statistically significant difference in [DV] across [groups]; *F*([df1], [df2]) = [F], *p* = [p], partial η² = [eta2]. Post-hoc comparisons using Tukey HSD indicated that [specific group comparisons].
+> A one-way ANOVA revealed [no] a statistically significant difference in [DV] across [groups]; *F*([df1], [df2]) = [F], *p* = [p], partial Î·Â² = [eta2]. Post-hoc comparisons using Tukey HSD indicated that [specific group comparisons].
 
 **Kruskal-Wallis test**:
-> A Kruskal-Wallis *H* test showed [no] a statistically significant difference in [DV] across [groups]; *H*([df]) = [H], *p* = [p], ε² = [epsilon2].
+> A Kruskal-Wallis *H* test showed [no] a statistically significant difference in [DV] across [groups]; *H*([df]) = [H], *p* = [p], ÎµÂ² = [epsilon2].
 
 **Chi-square test of independence**:
-> A chi-square test of independence was performed examining the relationship between [var1] and [var2]. The relationship was [not] significant, χ²([df], *N* = [n]) = [chi2], *p* = [p], Cramér's *V* = [V].
+> A chi-square test of independence was performed examining the relationship between [var1] and [var2]. The relationship was [not] significant, Ï‡Â²([df], *N* = [n]) = [chi2], *p* = [p], CramÃ©r's *V* = [V].
 
 **Fisher's exact test**:
-> Fisher's exact test indicated [no] a significant association between [var1] and [var2] (*p* = [p], Cramér's *V* = [V]).
+> Fisher's exact test indicated [no] a significant association between [var1] and [var2] (*p* = [p], CramÃ©r's *V* = [V]).
 
 **Pearson correlation**:
 > A Pearson correlation coefficient was computed to assess the linear relationship between [var1] and [var2]. There was [no] a significant correlation, *r*([df]) = [r], *p* = [p], 95% CI [[lower], [upper]].
 
 **Spearman correlation**:
-> A Spearman's rank-order correlation was computed to assess the relationship between [var1] and [var2]. There was [no] a significant correlation, ρ([df]) = [rho], *p* = [p].
+> A Spearman's rank-order correlation was computed to assess the relationship between [var1] and [var2]. There was [no] a significant correlation, Ï([df]) = [rho], *p* = [p].
 
 **Multiple linear regression**:
-> A multiple linear regression was calculated to predict [DV] based on [predictors]. A significant regression equation was found (*F*([df1], [df2]) = [F], *p* = [p], *R²* = [R2]). [Predictors] were significant predictors of [DV].
+> A multiple linear regression was calculated to predict [DV] based on [predictors]. A significant regression equation was found (*F*([df1], [df2]) = [F], *p* = [p], *RÂ²* = [R2]). [Predictors] were significant predictors of [DV].
 
 **Binary logistic regression**:
-> A binary logistic regression was performed to ascertain the effects of [predictors] on the likelihood of [outcome]. The model was [not] statistically significant, χ²([df], *N* = [n]) = [chi2], *p* = [p], explaining [R2]% (Nagelkerke *R²*) of the variance. [Specific predictors] were [not] significant.
+> A binary logistic regression was performed to ascertain the effects of [predictors] on the likelihood of [outcome]. The model was [not] statistically significant, Ï‡Â²([df], *N* = [n]) = [chi2], *p* = [p], explaining [R2]% (Nagelkerke *RÂ²*) of the variance. [Specific predictors] were [not] significant.
 
 **Cox proportional hazards regression**:
 > A Cox proportional hazards regression was performed to examine the effect of [predictors] on survival. [Predictor] was [not] significantly associated with [outcome], HR = [HR], 95% CI [[lower], [upper]], *p* = [p].
 
 **Ordinal logistic regression**:
-> An ordinal logistic regression was performed to assess the effect of [predictors] on [ordinal outcome]. The proportional odds assumption was [not] violated, χ²([df]) = [chi2], *p* = [p].
+> An ordinal logistic regression was performed to assess the effect of [predictors] on [ordinal outcome]. The proportional odds assumption was [not] violated, Ï‡Â²([df]) = [chi2], *p* = [p].
 
 **ROC analysis**:
 > ROC analysis revealed [excellent/good/fair/poor] discriminatory performance (AUC = [auc], 95% CI [[lower], [upper]]). The optimal cutoff according to Youden's index (*J* = [J]) was [threshold], yielding sensitivity = [sens] and specificity = [spec].
@@ -325,14 +329,14 @@ Before finalizing each figure, verify:
 
 ### Colors
 - [ ] Colorblind-safe palette used (not default matplotlib gray)
-- [ ] Muted, accessible colors — avoid neon/bright
+- [ ] Muted, accessible colors â€” avoid neon/bright
 - [ ] Alpha/transparency used for overlapping dense data
 - [ ] Sufficient contrast between categories
 
 ### Layout
 - [ ] No overlapping text or data points
 - [ ] Legend positioned optimally (top or bottom-right preferred)
-- [ ] Margins are adequate — no clipping
+- [ ] Margins are adequate â€” no clipping
 - [ ] Axis ranges are appropriate (not misleading)
 
 ### Theme
@@ -342,14 +346,14 @@ Before finalizing each figure, verify:
 - [ ] Top and right spines removed
 
 ### Data
-- [ ] Point sizes ≥ 2.5 for scatter plots
-- [ ] Line widths ≥ 0.8 for trend lines
+- [ ] Point sizes â‰¥ 2.5 for scatter plots
+- [ ] Line widths â‰¥ 0.8 for trend lines
 - [ ] Error bars or confidence bands included where applicable
 - [ ] Sample size (n) annotated where relevant
 - [ ] Effect sizes or test statistics annotated where applicable
 
 ### Export
-- [ ] Resolution ≥ 800 DPI for print, ≥ 300 DPI for review
+- [ ] Resolution â‰¥ 800 DPI for print, â‰¥ 300 DPI for review
 - [ ] Format: PNG (review), TIFF LZW (journals), PDF/SVG (vectors)
 - [ ] File named descriptively
 
@@ -358,7 +362,7 @@ Before finalizing each figure, verify:
 ## Quick Start (CLI)
 
 ```bash
-# Full pipeline: clean → analyze → visualize → export
+# Full pipeline: clean â†’ analyze â†’ visualize â†’ export
 python run_analysis.py --data data.xlsx --output report.docx --brief "study protocol text"
 
 # With explicit outcome variable
@@ -435,3 +439,4 @@ The final Word document should contain these sections in order:
    - Study limitations
    - Recommendations
 ```
+

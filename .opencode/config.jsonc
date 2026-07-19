@@ -7,7 +7,7 @@
     "data-analyst": {
       "name": "Data Analyst Specialist",
       "role": "Senior Medical Statistician and Data Analyst",
-      "skill": "SKILL.md",
+      "skill": ".agents/skills/data_analyst/SKILL.md",
       "model": {
         "provider": "anthropic",
         "model": "claude-sonnet-4-20250514",
