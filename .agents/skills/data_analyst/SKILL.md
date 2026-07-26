@@ -330,6 +330,12 @@ from agent_core.word_exporter import APAWordExporter
 
 ---
 
+## Core Knowledge & Skills Integration
+
+This specialist system integrates foundational biostatistical rules, diagnostic metrics, and analytical selection trees from [Biostatistical Methodology & Analysis Guide](file:///d:/Naggar%20Analytics/DataAnalyst_SP_Noora_V2/.agents/skills/biostatistician_expert/SKILL.md).
+
+---
+
 ## Target Output Structure (Word Document)
 
 The final Word document should contain these sections in order:
